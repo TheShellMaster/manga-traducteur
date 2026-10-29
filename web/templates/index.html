@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manga Translator Studio | AI Cloud Vision</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23f43f5e'/%3E%3Cstop offset='100%25' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='900' font-size='28'%3E漫%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Bangers&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+    <!-- Header -->
+    <header class="app-header">
+        <div class="logo-group">
+            <div class="logo-badge" aria-hidden="true">漫画</div>
+            <div class="logo-text">
+                <h1>Manga Translator <span>Studio</span></h1>
+                <p>100% Cloud Vision • Zéro Modèle Local • CBZ, CBR, RAR & Dossier</p>
+            </div>
+        </div>
+
+        <div class="api-status-pills" id="api-status-pills" aria-label="État des clés d'API">
+            <span class="status-pill" id="pill-gemini" title="Statut clé Google Gemini">Gemini : —</span>
+            <span class="status-pill" id="pill-openrouter" title="Statut clé OpenRouter">OpenRouter : —</span>
+            <span class="status-pill" id="pill-groq" title="Statut clé Groq">Groq : —</span>
+        </div>
+
+        <div class="header-actions">
+            <button id="btn-theme-toggle" class="btn btn-icon" aria-label="Basculer le thème clair ou sombre" title="Thème Clair / Sombre">
+                <span id="theme-icon">🌙</span>
+            </button>
+            <button id="btn-open-settings" class="btn btn-secondary" aria-label="Ouvrir les paramètres et clés d'API">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                Paramètres & APIs
+            </button>
+            <a href="#about-help" id="btn-help" class="btn btn-icon" aria-label="Aide et raccourcis clavier" title="Raccourcis : ←/→ pages, 1/2/3 vues, F plein écran">?</a>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="app-main">
+        <!-- 1. Drop Zone (Hidden once manga is loaded) -->
+        <section id="upload-section" class="panel upload-panel">
+            <div id="drop-zone" class="drop-zone">
+                <input type="file" id="file-input" accept=".cbz,.cbr,.rar,.zip,.png,.jpg,.jpeg,.webp" class="file-input-hidden">
+                <input type="file" id="folder-input" webkitdirectory directory multiple class="file-input-hidden">
+                <div class="drop-illustration">
+                    <div class="manga-icon-animated" aria-hidden="true">📖</div>
+                </div>
+                <h2>Glissez-déposez votre Manga ici</h2>
+                <p>Importez vos chapitres complets ou pages individuelles en un clic</p>
+
+                <div class="upload-buttons-row">
+                    <button type="button" id="btn-browse-files" class="btn btn-primary btn-lg" onclick="document.getElementById('file-input').click()">
+                        📄 Parcourir un Fichier
+                    </button>
+                    <button type="button" id="btn-browse-folder" class="btn btn-secondary btn-lg" onclick="document.getElementById('folder-input').click()">
+                        📁 Importer un Dossier
+                    </button>
+                </div>
+
+                <div class="format-cards">
+                    <div class="format-card"><span class="fmt-ext">CBZ / ZIP</span><span class="fmt-desc">Archive standard</span></div>
+                    <div class="format-card"><span class="fmt-ext">CBR / RAR</span><span class="fmt-desc">Extraction native</span></div>
+                    <div class="format-card"><span class="fmt-ext">DOSSIER</span><span class="fmt-desc">Chapitre complet</span></div>
+                    <div class="format-card"><span class="fmt-ext">PNG / JPG / WEBP</span><span class="fmt-desc">Page unitaire</span></div>
+                </div>
+
+                <div class="features-row">
+                    <span>⚡ Zéro modèle local (< 50 Mo RAM)</span>
+                    <span>🌐 Traduction Cloud Vision</span>
+                    <span>🔒 Restitution au format exact</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Workspace View (Reader, Progress, Controls) -->
+        <section id="workspace-section" class="workspace-section hidden">
+            <!-- Top Controls Bar -->
+            <div class="workspace-topbar">
+                <div class="file-badge">
+                    <span id="badge-filename" class="filename">manga.cbz</span>
+                    <span id="badge-pages" class="page-count">0 pages</span>
+                </div>
+
+                <div class="view-toggle-group" role="group" aria-label="Modes d'affichage">
+                    <button id="view-mode-split" class="btn-toggle active" title="Vue Comparateur Côte à Côte (Touche 1)" aria-label="Mode Comparateur">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></svg>
+                        Comparateur
+                    </button>
+                    <button id="view-mode-single" class="btn-toggle" title="Vue Liseuse Seule (Touche 2)" aria-label="Mode Liseuse">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                        Liseuse
+                    </button>
+                    <button id="view-mode-slider" class="btn-toggle" title="Vue Slider Avant/Après (Touche 3)" aria-label="Mode Slider">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><polyline points="9 9 6 12 9 15"/><polyline points="15 9 18 12 15 15"/></svg>
+                        Slider
+                    </button>
+                    <div class="slider-toggle-wrap hidden" id="version-toggle-wrap">
+                        <span class="label-opt">Original</span>
+                        <label class="switch" aria-label="Basculer entre page originale et traduite">
+                            <input type="checkbox" id="chk-show-translated" checked>
+                            <span class="slider-round"></span>
+                        </label>
+                        <span class="label-opt highlight">Traduit</span>
+                    </div>
+                </div>
+
+                <!-- Zoom & Reader Tools -->
+                <div class="zoom-tools-group" role="group" aria-label="Outils de zoom et lecture">
+                    <button id="btn-zoom-out" class="btn btn-icon btn-sm" aria-label="Zoom arrière" title="Zoom arrière">−</button>
+                    <span id="lbl-zoom-level" class="zoom-label" title="Niveau de zoom">100%</span>
+                    <button id="btn-zoom-in" class="btn btn-icon btn-sm" aria-label="Zoom avant" title="Zoom avant">+</button>
+                    <button id="btn-zoom-fit" class="btn btn-secondary btn-sm" aria-label="Ajuster l'image" title="Basculer Ajuster Hauteur / Largeur">Ajuster</button>
+                    <button id="btn-fullscreen" class="btn btn-icon btn-sm" aria-label="Plein écran (Touche F)" title="Plein écran (Touche F)">⛶</button>
+                </div>
+
+                <div class="action-buttons-group">
+                    <button id="btn-new-manga" class="btn btn-secondary" title="Charger un autre manga" aria-label="Charger un nouveau manga">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                        Nouveau
+                    </button>
+                    <button id="btn-toggle-bubbles" class="btn btn-secondary" title="Ouvrir l'éditeur de bulles en direct (< 50 ms)" aria-label="Ouvrir l'éditeur de bulles détectées">
+                        💬 Bulles (<span id="lbl-bubbles-count">0</span>)
+                    </button>
+                    <button id="btn-retranslate-page" class="btn btn-secondary" title="Retraduire uniquement la page affichée" aria-label="Retraduire cette page">
+                        🔄 Retraduire page
+                    </button>
+                    <button id="btn-start-translation" class="btn btn-accent btn-pulse" aria-label="Lancer la traduction du chapitre">
+                        <span class="btn-icon" aria-hidden="true">⚡</span> Lancer la Traduction
+                    </button>
+                    <button id="btn-download" class="btn btn-success hidden" aria-label="Télécharger le manga traduit">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <span id="lbl-download">Télécharger CBZ</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progress Banner (shows when translating) -->
+            <div id="progress-banner" class="progress-banner hidden">
+                <div class="progress-info">
+                    <div class="spinner-manga" aria-hidden="true"></div>
+                    <div class="progress-labels">
+                        <div class="progress-title-row">
+                            <span class="progress-title" id="progress-title">Traduction en cours...</span>
+                            <span class="progress-stats" id="progress-stats">✓ 0 traduites · ✗ 0 erreur</span>
+                            <span class="progress-eta" id="progress-eta">Temps estimé : calcul...</span>
+                        </div>
+                        <div class="progress-log" id="progress-log">Initialisation...</div>
+                    </div>
+                    <div class="progress-percent" id="progress-percent">0%</div>
+                    <button id="btn-cancel-translation" class="btn btn-danger btn-sm" aria-label="Annuler la traduction en cours">
+                        ✕ Annuler
+                    </button>
+                </div>
+                <div class="progress-track">
+                    <div id="progress-fill" class="progress-fill" style="width: 0%;"></div>
+                </div>
+            </div>
+
+            <!-- Main Interactive Reader Area -->
+            <div class="reader-area" id="reader-area">
+                <button id="btn-prev-page" class="nav-arrow nav-prev" aria-label="Page précédente" title="Page précédente (←)">‹</button>
+                
+                <div class="reader-stage" id="reader-stage">
+                    <!-- Original Image Column -->
+                    <div class="image-column" id="col-original">
+                        <div class="column-header">Original (<span id="lbl-src-lang">Japonais</span>)</div>
+                        <div class="image-wrapper">
+                            <img id="img-original" src="" alt="Page Originale">
+                        </div>
+                    </div>
+
+                    <!-- Translated Image Column -->
+                    <div class="image-column" id="col-translated">
+                        <div class="column-header">Traduction (<span id="lbl-tgt-lang">Français</span>)</div>
+                        <div class="image-wrapper">
+                            <img id="img-translated" src="" alt="Page Traduite">
+                            <!-- Overlay loading patience animation -->
+                            <div id="page-loader" class="page-loader hidden">
+                                <div class="pulse-bubble">
+                                    <div class="spinner-dots">
+                                        <span></span><span></span><span></span>
+                                    </div>
+                                    <p>Analyse Cloud Vision...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Slider Comparison Container (3rd mode) -->
+                    <div class="slider-compare-container hidden" id="slider-compare-container">
+                        <div class="column-header">Comparateur Interactif (Glisser le curseur Avant / Après)</div>
+                        <div class="slider-stage" id="slider-stage">
+                            <img id="slider-img-trans" class="slider-img-base" src="" alt="Page Traduite">
+                            <img id="slider-img-orig" class="slider-img-overlay" src="" alt="Page Originale">
+                            <div id="slider-handle" class="slider-handle" role="slider" aria-label="Curseur de comparaison Avant/Après" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0">
+                                <div class="slider-line"></div>
+                                <div class="slider-knob">‹ ›</div>
+                            </div>
+                            <span class="slider-tag tag-left">Original</span>
+                            <span class="slider-tag tag-right">Traduit</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="btn-next-page" class="nav-arrow nav-next" aria-label="Page suivante" title="Page suivante (→)">›</button>
+
+                <!-- Collapsible Live Bubble Editor Drawer -->
+                <aside id="bubble-editor-panel" class="bubble-editor-panel hidden" aria-label="Éditeur de bulles détectées">
+                    <div class="bubble-editor-header">
+                        <h3>💬 Bulles détectées</h3>
+                        <button id="btn-close-bubbles" class="btn-close btn-sm" aria-label="Fermer l'éditeur de bulles">&times;</button>
+                    </div>
+                    <div id="bubble-editor-list" class="bubble-editor-list">
+                        <p class="box-hint">Aucune bulle détectée sur cette page pour le moment.</p>
+                    </div>
+                    <div class="bubble-editor-footer">
+                        <button id="btn-apply-bubbles" class="btn btn-primary btn-block" aria-label="Appliquer les modifications de bulles">
+                            ✓ Appliquer à la page (&lt; 50 ms)
+                        </button>
+                    </div>
+                </aside>
+            </div>
+
+            <!-- Bottom Thumbnails Strip -->
+            <div class="thumbnail-strip-wrap">
+                <div class="strip-header">
+                    <span>Navigation par page (<span id="strip-counter">1 / 1</span>) • Raccourcis : <code>←/→</code> Pages · <code>1/2/3</code> Vues · <code>F</code> Plein écran</span>
+                    <span class="status-legend">
+                        <span><span class="dot dot-done"></span> Traduit</span>
+                        <span><span class="dot dot-proc"></span> En cours</span>
+                        <span><span class="dot dot-err"></span> Erreur</span>
+                        <span><span class="dot dot-pend"></span> En attente</span>
+                    </span>
+                </div>
+                <div class="thumbnail-strip" id="thumbnail-strip">
+                    <!-- Thumbnails dynamically populated -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Settings Modal Drawer -->
+    <div id="settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-settings-title">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-settings-title">⚙️ Configuration & Fournisseurs d'IA</h2>
+                <button id="btn-close-settings" class="btn-close" aria-label="Fermer la fenêtre de configuration">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="tabs-nav" role="tablist">
+                    <button class="tab-btn active" data-tab="tab-api" role="tab">Fournisseurs & Modèles</button>
+                    <button class="tab-btn" data-tab="tab-lang" role="tab">Langues & Traduction</button>
+                    <button class="tab-btn" data-tab="tab-style" role="tab">Style & Bulles</button>
+                </div>
+
+                <!-- Tab 1: API Providers -->
+                <div id="tab-api" class="tab-pane active">
+                    <div class="form-group">
+                        <label for="cfg-provider">Fournisseur de Vision :</label>
+                        <select id="cfg-provider" class="form-select">
+                            <option value="auto">Auto (Gemini en priorité, OpenRouter en repli)</option>
+                            <option value="gemini">Google Gemini (Gratuit 1500 req/jour)</option>
+                            <option value="openrouter">OpenRouter (Modèles gratuits ou payants)</option>
+                            <option value="custom">API Personnalisée (N'importe quel endpoint OpenAI-compatible)</option>
+                        </select>
+                    </div>
+
+                    <!-- Gemini Box -->
+                    <div class="provider-box" id="box-gemini">
+                        <div class="box-title">Google Gemini (Recommandé - 100% Gratuit)</div>
+                        <p class="box-hint">1500 requêtes gratuites/jour avec une clé sur <a href="https://aistudio.google.com" target="_blank" rel="noopener">Google AI Studio</a>.</p>
+                        <div class="form-group">
+                            <label for="cfg-gemini-key">Clé d'API Gemini (GEMINI_API_KEY) :</label>
+                            <input type="password" id="cfg-gemini-key" class="form-input" placeholder="AIzaSy...">
+                        </div>
+                    </div>
+
+                    <!-- OpenRouter Box -->
+                    <div class="provider-box" id="box-openrouter">
+                        <div class="box-title">OpenRouter</div>
+                        <p class="box-hint">Permet d'utiliser Gemma-4 Vision, Nemotron-VL gratuitement sur <a href="https://openrouter.ai" target="_blank" rel="noopener">openrouter.ai</a>.</p>
+                        <div class="form-group">
+                            <label for="cfg-openrouter-key">Clé d'API OpenRouter (OPENROUTER_API_KEY) :</label>
+                            <input type="password" id="cfg-openrouter-key" class="form-input" placeholder="sk-or-v1-...">
+                        </div>
+                    </div>
+
+                    <!-- Custom API Endpoint Box -->
+                    <div class="provider-box" id="box-custom">
+                        <div class="box-title">Endpoint Personnalisé (OpenAI-compatible)</div>
+                        <p class="box-hint">Permet de brancher n'importe quelle API distante compatible (Groq, Mistral, Ollama Cloud, etc.).</p>
+                        <div class="form-group">
+                            <label for="cfg-custom-base-url">Base URL :</label>
+                            <input type="text" id="cfg-custom-base-url" class="form-input" placeholder="https://api.monserveur.com/v1">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfg-custom-api-key">Clé d'API :</label>
+                            <input type="password" id="cfg-custom-api-key" class="form-input" placeholder="sk-...">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfg-custom-model">Identifiant du modèle de Vision :</label>
+                            <input type="text" id="cfg-custom-model" class="form-input" placeholder="ex: google/gemma-4-31b-it:free">
+                        </div>
+                    </div>
+
+                    <!-- Groq Refine Box -->
+                    <div class="provider-box">
+                        <div class="box-title">Raffinement de texte via Groq (Optionnel)</div>
+                        <p class="box-hint">Améliore la fluidité du français parlé à très haute vitesse via <a href="https://groq.com" target="_blank" rel="noopener">groq.com</a>.</p>
+                        <div class="form-group">
+                            <label for="cfg-groq-key">Clé d'API Groq (GROQ_API_KEY) :</label>
+                            <input type="password" id="cfg-groq-key" class="form-input" placeholder="gsk_...">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Languages -->
+                <div id="tab-lang" class="tab-pane">
+                    <div class="form-row">
+                        <div class="form-group col-half">
+                            <label for="cfg-src-lang">Langue Source :</label>
+                            <select id="cfg-src-lang" class="form-select">
+                                <option value="Japanese" selected>Japonais (日本語)</option>
+                                <option value="English">Anglais (English)</option>
+                                <option value="Korean">Coréen (한국어)</option>
+                                <option value="Chinese">Chinois (中文)</option>
+                                <option value="Auto">Détection Automatique</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-half">
+                            <label for="cfg-tgt-lang">Langue Cible :</label>
+                            <select id="cfg-tgt-lang" class="form-select">
+                                <option value="French" selected>Français (Naturel)</option>
+                                <option value="English">Anglais (English)</option>
+                                <option value="Spanish">Espagnol (Español)</option>
+                                <option value="German">Allemand (Deutsch)</option>
+                                <option value="Italian">Italien (Italiano)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Style & Typesetting -->
+                <div id="tab-style" class="tab-pane">
+                    <div class="form-group">
+                        <label for="cfg-font-style">Style de Police :</label>
+                        <select id="cfg-font-style" class="form-select">
+                            <option value="bold" selected>Anime Manga Bold (Recommandé)</option>
+                            <option value="comic">Comic Style</option>
+                            <option value="sans">Moderne Sans-Serif</option>
+                            <option value="serif">Classique Serif</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cfg-font-size">Dimensionnement du Texte :</label>
+                        <div class="range-wrap">
+                            <input type="range" id="cfg-font-size" min="0" max="32" value="0" class="form-range">
+                            <span id="lbl-font-size">Auto-Fit (Adaptation automatique)</span>
+                        </div>
+                        <p class="box-hint">0 = Calcul automatique optimal selon la taille de chaque bulle.</p>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-half">
+                            <label for="cfg-mask-style">Forme du Masque de Bulle :</label>
+                            <select id="cfg-mask-style" class="form-select">
+                                <option value="smart" selected>✨ Intelligent (Contours préservés &amp; bulles sombres)</option>
+                                <option value="rounded">Rectangle Arrondi Doux</option>
+                                <option value="ellipse">Ovale / Ellipse</option>
+                                <option value="rectangle">Rectangle plein</option>
+                                <option value="transparent">Transparent (Contour blanc)</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-half">
+                            <label for="cfg-text-color">Couleur du Texte :</label>
+                            <input type="color" id="cfg-text-color" value="#000000" class="form-color">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-save-settings" class="btn btn-primary">Enregistrer les Paramètres</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+    <!-- Script -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
