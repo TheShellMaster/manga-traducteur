@@ -1,0 +1,24 @@
+# Environment & Secrets (NEVER COMMIT)
+.env
+.env.*
+!.env.example
+
+# Virtual Environments & Python Bytecode
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Manga Archives & Local Test Chapters (Copyright / Heavy binaries)
+*.cbz
+*.cbr
+*.rar
+*.zip
+Otome Game Sekai wa Mob ni Kibishii Sekai desu/
+
+# Temp & OS files
+/tmp/
+.DS_Store
+Thumbs.db
