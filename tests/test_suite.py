@@ -366,7 +366,7 @@ def test_groq_refine_polishes_all_bubbles_even_with_draft(monkeypatch):
         {"box": (10, 10, 200, 100), "ja": "何を言っているんだ", "fr": "Brouillon littéral 1"},
         {"box": (10, 120, 200, 200), "ja": "あっちへ行け", "fr": "Brouillon littéral 2"},
     ]
-    gr.refine_translations_with_groq(blocks, groq_api_key="gsk_fake_test_key", target_lang="French")
+    gr.refine_translations_with_groq(blocks, groq_api_key="fake_groq_test_key", target_lang="French")
     assert blocks[0]["fr"] == "Mais qu'est-ce que tu racontes ?!"
     assert blocks[1]["fr"] == "Dégage de là !"
 
