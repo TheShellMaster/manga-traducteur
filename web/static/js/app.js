@@ -1,9 +1,10 @@
 let currentSession = null;
 let currentPageIndex = 0;
 let pollInterval = null;
-let viewMode = 'split'; // 'split', 'single', or 'slider'
+let viewMode = 'split'; // 'split', 'single', 'slider', or 'webtoon'
 let zoomLevel = 100;
 let fitWidthMode = false;
+let isRtlMode = false; // Reading direction: false = LTR, true = RTL (Manga)
 let translationStartTime = null;
 
 // DOM Elements
@@ -51,6 +52,9 @@ const progressFill = document.getElementById('progress-fill');
 const viewSplit = document.getElementById('view-mode-split');
 const viewSingle = document.getElementById('view-mode-single');
 const viewSlider = document.getElementById('view-mode-slider');
+const viewWebtoon = document.getElementById('view-mode-webtoon');
+const webtoonScrollContainer = document.getElementById('webtoon-scroll-container');
+const btnReadingDir = document.getElementById('btn-reading-dir');
 const chkShowTranslated = document.getElementById('chk-show-translated');
 const versionToggleWrap = document.getElementById('version-toggle-wrap');
 
@@ -141,6 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initViewModes();
     initSliderCompare();
     initZoomAndFullscreen();
+    initSlowMotionMouseEngine();
 });
 
 // Theme Toggle (Light / Dark) stored in localStorage
@@ -178,14 +183,14 @@ function initDragAndDrop() {
         });
     });
 
-    ['dragleave', 'drop'].forEach(name => {
-        dropZone.addEventListener(name, (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-        });
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
     });
 
     dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
         const files = e.dataTransfer.files;
         if (files.length > 1) {
             handleFolderUpload(files);
@@ -210,6 +215,14 @@ function bindUploadInputs() {
             if (e.target.files.length > 0) handleFolderUpload(e.target.files);
         });
     }
+    const btnFiles = document.getElementById('btn-browse-files');
+    if (btnFiles && fInput) {
+        btnFiles.addEventListener('click', () => fInput.click());
+    }
+    const btnFolder = document.getElementById('btn-browse-folder');
+    if (btnFolder && dInput) {
+        btnFolder.addEventListener('click', () => dInput.click());
+    }
 }
 
 function getDropZoneDefaultHTML() {
@@ -220,8 +233,8 @@ function getDropZoneDefaultHTML() {
         <h2>Glissez-déposez votre Manga ici</h2>
         <p>Importez vos chapitres complets ou pages individuelles en un clic</p>
         <div class="upload-buttons-row">
-            <button type="button" id="btn-browse-files" class="btn btn-primary btn-lg" onclick="document.getElementById('file-input').click()">📄 Parcourir un Fichier</button>
-            <button type="button" id="btn-browse-folder" class="btn btn-secondary btn-lg" onclick="document.getElementById('folder-input').click()">📁 Importer un Dossier</button>
+            <button type="button" id="btn-browse-files" class="btn btn-primary btn-lg">📄 Parcourir un Fichier</button>
+            <button type="button" id="btn-browse-folder" class="btn btn-secondary btn-lg">📁 Importer un Dossier</button>
         </div>
         <div class="format-cards">
             <div class="format-card"><span class="fmt-ext">CBZ / ZIP</span><span class="fmt-desc">Archive standard</span></div>
@@ -249,6 +262,7 @@ function activateSessionWorkspace(data) {
     updateDownloadButtonLabel(data.format);
 
     renderThumbnails();
+    renderWebtoonPages();
     loadPage(0);
 }
 
@@ -335,13 +349,33 @@ function initNavigation() {
         const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
         if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
 
-        if (e.key === 'ArrowLeft') btnPrev.click();
-        else if (e.key === 'ArrowRight') btnNext.click();
-        else if (e.key === '1') viewSplit.click();
+        if (e.key === 'ArrowLeft') {
+            isRtlMode ? btnNext.click() : btnPrev.click();
+        } else if (e.key === 'ArrowRight') {
+            isRtlMode ? btnPrev.click() : btnNext.click();
+        } else if (e.key === '1') viewSplit.click();
         else if (e.key === '2') viewSingle.click();
         else if (e.key === '3' && viewSlider) viewSlider.click();
+        else if (e.key === '4' && viewWebtoon) viewWebtoon.click();
+        else if ((e.key === 'r' || e.key === 'R') && btnReadingDir) btnReadingDir.click();
         else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
     });
+
+    if (btnReadingDir) {
+        btnReadingDir.addEventListener('click', () => {
+            isRtlMode = !isRtlMode;
+            btnReadingDir.textContent = isRtlMode ? '🇯🇵 RTL ←' : '🌍 LTR →';
+            btnReadingDir.classList.toggle('active', isRtlMode);
+            if (readerStage) readerStage.classList.toggle('rtl-mode', isRtlMode);
+            showToast(
+                isRtlMode
+                    ? 'Sens de lecture Manga activé (Droite → Gauche)'
+                    : 'Sens de lecture Occidental activé (Gauche → Droite)',
+                'info',
+                2500
+            );
+        });
+    }
 
     // Reset button (Nouveau manga)
     const btnNewManga = document.getElementById('btn-new-manga');
@@ -599,15 +633,43 @@ function renderThumbnails() {
     });
 }
 
-// View Modes (Split vs Single vs Slider)
+function renderWebtoonPages() {
+    if (!webtoonScrollContainer || !currentSession) return;
+    webtoonScrollContainer.innerHTML = '';
+    currentSession.pages.forEach((p, idx) => {
+        const img = document.createElement('img');
+        img.className = 'webtoon-page-img';
+        img.id = `webtoon-img-${idx}`;
+        img.loading = 'lazy';
+        img.alt = `Page ${idx + 1}`;
+        const isDone = p.status === 'done';
+        img.src = isDone
+            ? `/api/image/${currentSession.session_id}/translated/${idx}?t=${Date.now()}`
+            : `/api/image/${currentSession.session_id}/original/${idx}`;
+        img.addEventListener('click', () => {
+            currentPageIndex = idx;
+            stripCounter.textContent = `${idx + 1} / ${currentSession.total_pages}`;
+        });
+        webtoonScrollContainer.appendChild(img);
+    });
+}
+
+// View Modes (Split vs Single vs Slider vs Webtoon)
 function initViewModes() {
-    viewSplit.addEventListener('click', () => {
-        viewMode = 'split';
-        viewSplit.classList.add('active');
+    function clearActiveViewModes() {
+        viewSplit.classList.remove('active');
         viewSingle.classList.remove('active');
         if (viewSlider) viewSlider.classList.remove('active');
+        if (viewWebtoon) viewWebtoon.classList.remove('active');
         versionToggleWrap.classList.add('hidden');
         if (sliderCompareContainer) sliderCompareContainer.classList.add('hidden');
+        if (webtoonScrollContainer) webtoonScrollContainer.classList.add('hidden');
+    }
+
+    viewSplit.addEventListener('click', () => {
+        viewMode = 'split';
+        clearActiveViewModes();
+        viewSplit.classList.add('active');
 
         colOriginal.style.display = 'flex';
         colOriginal.style.maxWidth = '50%';
@@ -617,11 +679,9 @@ function initViewModes() {
 
     viewSingle.addEventListener('click', () => {
         viewMode = 'single';
+        clearActiveViewModes();
         viewSingle.classList.add('active');
-        viewSplit.classList.remove('active');
-        if (viewSlider) viewSlider.classList.remove('active');
         versionToggleWrap.classList.remove('hidden');
-        if (sliderCompareContainer) sliderCompareContainer.classList.add('hidden');
 
         updateSingleView();
     });
@@ -629,14 +689,27 @@ function initViewModes() {
     if (viewSlider) {
         viewSlider.addEventListener('click', () => {
             viewMode = 'slider';
+            clearActiveViewModes();
             viewSlider.classList.add('active');
-            viewSplit.classList.remove('active');
-            viewSingle.classList.remove('active');
-            versionToggleWrap.classList.add('hidden');
 
             colOriginal.style.display = 'none';
             colTranslated.style.display = 'none';
             if (sliderCompareContainer) sliderCompareContainer.classList.remove('hidden');
+        });
+    }
+
+    if (viewWebtoon) {
+        viewWebtoon.addEventListener('click', () => {
+            viewMode = 'webtoon';
+            clearActiveViewModes();
+            viewWebtoon.classList.add('active');
+
+            colOriginal.style.display = 'none';
+            colTranslated.style.display = 'none';
+            if (webtoonScrollContainer) {
+                webtoonScrollContainer.classList.remove('hidden');
+                renderWebtoonPages();
+            }
         });
     }
 
@@ -806,7 +879,13 @@ function startPolling() {
                 if (p.blocks) {
                     currentSession.pages[idx].blocks = p.blocks;
                 }
-                if (p.status === 'done') doneCount++;
+                if (p.status === 'done') {
+                    doneCount++;
+                    const webtoonImg = document.getElementById(`webtoon-img-${idx}`);
+                    if (webtoonImg && prevStatus !== 'done') {
+                        webtoonImg.src = `/api/image/${currentSession.session_id}/translated/${idx}?t=${Date.now()}`;
+                    }
+                }
                 if (p.status === 'error') errCount++;
                 updateThumbnailBadge(idx, p.status);
                 if (idx === currentPageIndex && prevStatus !== p.status) {
@@ -969,4 +1048,71 @@ async function fetchSettings() {
     } catch (e) {
         console.error("Erreur chargement settings:", e);
     }
+}
+
+// Slow-Motion Mouse-Following Physics Engine (T12)
+function initSlowMotionMouseEngine() {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        return;
+    }
+
+    const halo = document.getElementById('slowmo-halo');
+    const glyphs = Array.from(document.querySelectorAll('.slowmo-glyph'));
+    const pulseBubble = document.getElementById('slowmo-pulse-bubble');
+
+    let targetX = window.innerWidth * 0.5;
+    let targetY = window.innerHeight * 0.5;
+    let currentX = targetX;
+    let currentY = targetY;
+    let slowX = targetX;
+    let slowY = targetY;
+
+    // Silky slow-motion interpolation factors
+    const LERP_PRIMARY = 0.035;
+    const LERP_DEEP = 0.018;
+
+    window.addEventListener('mousemove', (e) => {
+        targetX = e.clientX;
+        targetY = e.clientY;
+    }, { passive: true });
+
+    function animateSlowMo() {
+        currentX += (targetX - currentX) * LERP_PRIMARY;
+        currentY += (targetY - currentY) * LERP_PRIMARY;
+        slowX += (targetX - slowX) * LERP_DEEP;
+        slowY += (targetY - slowY) * LERP_DEEP;
+
+        const normX = (currentX / Math.max(1, window.innerWidth)) - 0.5;
+        const normY = (currentY / Math.max(1, window.innerHeight)) - 0.5;
+
+        if (halo) {
+            halo.style.transform = `translate3d(${currentX - 260}px, ${currentY - 260}px, 0)`;
+        }
+
+        glyphs.forEach((g, idx) => {
+            const depth = parseFloat(g.dataset.depth || '0.03');
+            const offsetX = (slowX - window.innerWidth * 0.5) * depth * 12;
+            const offsetY = (slowY - window.innerHeight * 0.5) * depth * 12;
+            const rot = (normX * 18) * (idx % 2 === 0 ? 1 : -1);
+            g.style.transform = `translate3d(${offsetX.toFixed(1)}px, ${offsetY.toFixed(1)}px, 0) rotate(${rot.toFixed(1)}deg)`;
+        });
+
+        // Interactive patience animation when pageLoader is visible
+        if (pulseBubble && pageLoader && !pageLoader.classList.contains('hidden')) {
+            const pullX = normX * 26;
+            const pullY = normY * 26;
+            pulseBubble.style.transform = `translate3d(${pullX.toFixed(1)}px, ${pullY.toFixed(1)}px, 0)`;
+        }
+
+        // Subtle 3D magnetic tilt on dropZone while upload section is visible
+        if (dropZone && uploadSection && !uploadSection.classList.contains('hidden')) {
+            const tiltX = (-normY * 4.5).toFixed(2);
+            const tiltY = (normX * 4.5).toFixed(2);
+            dropZone.style.transform = `perspective(1100px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
+        }
+
+        requestAnimationFrame(animateSlowMo);
+    }
+
+    requestAnimationFrame(animateSlowMo);
 }

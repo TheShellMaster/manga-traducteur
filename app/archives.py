@@ -174,17 +174,19 @@ class ArchiveHandler:
             return output_path
 
         if fmt == "cbz":
+            sorted_items = sorted(items, key=lambda it: natural_sort_key(it.relative_name))
             with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zout:
-                for item in items:
+                for item in sorted_items:
+                    comp_type = zipfile.ZIP_STORED if item.is_image else zipfile.ZIP_DEFLATED
                     if item.relative_name in rendered_images:
                         buf = io.BytesIO()
                         ArchiveHandler._save_image(rendered_images[item.relative_name], buf, suffix=Path(item.relative_name).suffix)
-                        zout.writestr(item.relative_name, buf.getvalue())
+                        zout.writestr(item.relative_name, buf.getvalue(), compress_type=comp_type)
                     else:
                         if item.raw_bytes is not None:
-                            zout.writestr(item.relative_name, item.raw_bytes)
+                            zout.writestr(item.relative_name, item.raw_bytes, compress_type=comp_type)
                         elif item.source_path is not None:
-                            zout.write(item.source_path, arcname=item.relative_name)
+                            zout.write(item.source_path, arcname=item.relative_name, compress_type=comp_type)
             return output_path
 
         if fmt == "rar":

@@ -399,3 +399,40 @@ def test_api_rerender_live_bubble_editor_under_200ms():
     assert data["blocks"][0]["fr"] == "Texte modifié en direct !"
     assert elapsed_ms < 200.0
 
+
+def test_multi_manga_resolution_and_webtoon_generalization():
+    from app.typesetter import render_manga_page
+    from app.cloud_vision import encode_image_for_vision
+
+    # 1. Small 700px scan
+    small_img = Image.new("RGB", (700, 1000), color="white")
+    out_small = render_manga_page(
+        small_img,
+        [{"box": (50, 50, 280, 180), "fr": "Petit scan ancien"}],
+        mask_style="smart",
+    )
+    assert out_small.size == (700, 1000)
+
+    # 2. High-res 3000px double-page spread
+    spread_img = Image.new("RGB", (3000, 2100), color="white")
+    raw_s, b64_spread = encode_image_for_vision(spread_img, max_side=1600)
+    assert len(raw_s) > 100 and len(b64_spread) > 100
+    out_spread = render_manga_page(
+        spread_img,
+        [{"box": (200, 200, 900, 600), "fr": "Double page haute définition !"}],
+        mask_style="smart",
+    )
+    assert out_spread.size == (3000, 2100)
+
+    # 3. Tall Webtoon vertical strip (800 x 3200)
+    webtoon_img = Image.new("RGB", (800, 3200), color="white")
+    raw_wt, b64_wt = encode_image_for_vision(webtoon_img, max_side=1600)
+    assert len(raw_wt) > 100 and len(b64_wt) > 100
+    out_wt = render_manga_page(
+        webtoon_img,
+        [{"box": (100, 400, 700, 800), "fr": " Bande verticale Webtoon / Manhwa "}],
+        mask_style="smart",
+    )
+    assert out_wt.size == (800, 3200)
+
+

@@ -350,9 +350,14 @@ def _apply_smart_bubble_mask(
     draw_m.rectangle([0, 0, inset - 1, ch - 1], fill=0)
     draw_m.rectangle([cw - inset, 0, cw - 1, ch - 1], fill=0)
 
-    # Morphological dilation (5x5) + feathering (1.2px) in C, then subtract border_img again
-    mask_img = ink_mask.filter(ImageFilter.MaxFilter(5))
-    mask_img = mask_img.filter(ImageFilter.GaussianBlur(radius=1.2))
+    # Dynamic resolution scaling factor (supports 700px scans, 1400px standard, 3000px spreads & Webtoons)
+    ref_scale = max(0.5, min(2.5, min(width, height) / 1400.0))
+    dilation_kernel = 3 if ref_scale < 0.75 else (5 if ref_scale < 1.45 else 7)
+    blur_r = round(max(0.7, min(2.4, 1.2 * ref_scale)), 2)
+
+    # Morphological dilation + feathering in C proportional to resolution, then subtract border_img again
+    mask_img = ink_mask.filter(ImageFilter.MaxFilter(dilation_kernel))
+    mask_img = mask_img.filter(ImageFilter.GaussianBlur(radius=blur_r))
     mask_img = ImageChops.subtract(mask_img, border_img)
 
     fill_layer = Image.new("RGB", (cw, ch), bg_rgb)
@@ -443,6 +448,11 @@ def render_manga_page(
                 radius = min(14, int(min(box_w, box_h) * 0.25))
                 draw.rounded_rectangle(mask_rect, radius=radius, fill=(255, 255, 255))
 
+        ref_scale = max(0.5, min(2.5, min(width, height) / 1400.0))
+        dyn_min_size = max(8, round(10 * min(1.4, max(0.75, ref_scale))))
+        dyn_max_size = max(26, round(42 * ref_scale))
+        stroke_w = max(1, min(4, round(2.0 * ref_scale)))
+
         font, lines, line_h = fit_text_lines(
             draw,
             text,
@@ -450,6 +460,8 @@ def render_manga_page(
             box_h=box_h,
             font_style=font_style,
             fixed_size=fixed_font_size if fixed_font_size and fixed_font_size > 0 else None,
+            min_size=dyn_min_size,
+            max_size=dyn_max_size,
         )
         if not lines:
             continue
@@ -468,7 +480,7 @@ def render_manga_page(
                     line,
                     font=font,
                     fill=fg_color,
-                    stroke_width=2,
+                    stroke_width=stroke_w,
                     stroke_fill=stroke_color,
                 )
             else:

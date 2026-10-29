@@ -58,10 +58,25 @@ Rules:
 
 
 def encode_image_for_vision(img: Image.Image, max_side: int = 1600) -> Tuple[bytes, str]:
-    """Resizes image keeping aspect ratio and returns JPEG bytes and base64 string."""
+    """
+    Resizes image keeping aspect ratio for Vision APIs.
+    Adapts dynamically to standard manga scans, double-page spreads, and tall Webtoon/Manhwa strips.
+    """
     img = img.convert("RGB")
     width, height = img.size
-    scale = min(1.0, float(max_side) / max(width, height))
+    long_side = max(width, height)
+    short_side = max(1, min(width, height))
+    aspect = long_side / float(short_side)
+
+    if aspect > 2.4:
+        # Webtoon / vertical strip: preserve horizontal legibility while capping extreme height
+        scale = min(1.0, 1080.0 / short_side, 3200.0 / long_side)
+    elif width > height * 1.15:
+        # Double-page spread: allow higher horizontal resolution up to 2200px
+        scale = min(1.0, float(max(max_side, 2200)) / long_side)
+    else:
+        scale = min(1.0, float(max_side) / long_side)
+
     if scale < 1.0:
         new_w = max(1, round(width * scale))
         new_h = max(1, round(height * scale))

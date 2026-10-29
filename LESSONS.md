@@ -48,3 +48,16 @@ Ce fichier consigne les erreurs rencontrées, leur cause racine et la règle pr�
   - Un parcours BFS en Python pur sur une boîte de `950×430` pixels prenait ~200 ms par boîte (`760 ms` par page).
 - **Correctif & Règle** :
   - Utiliser `core_gray.histogram()` et `core_gray.point(lut)` en C (`Pillow`) + détection des composantes reliées au bord sur grille bornée (`<= 110×110`) + `ImageChops.subtract`, réduisant le temps de rendu complet d'une planche `1403×2000` à `~180 ms` tout en préservant à 100 % les contours noirs et les fonds sombres.
+
+---
+
+## 7. Reverse-Engineering Sous le Capot via le Serveur MCP `rea` (T10)
+- **Outils MCP `rea` exécutés** :
+  - `open_binary` + `inspect_artifact(detail="complete")` sur `Official_Chapter 41.5.cbz` (Evidence ID `ev_dee5b04cd0019ff9e5624af90b3976ac756d1535faf039959a6e35d455131c55`).
+  - `inspect_with_objdump(operation="file_headers")` sur `/usr/bin/unrar` (Evidence ID `ev_4a099d03258a3b85d85de37af910da64d9414b0913033506eac53d239206aa20`) et `inspect_with_objdump(operation="section_headers")` sur `PIL/_imaging.cpython-314-x86_64-linux-gnu.so`.
+  - `analyze_javascript_application` sur `web/static/js` (Evidence ID `ev_18069e8e9b35d0b66ba2e748f4ed5a8d20b0ddae12d1e4f8f0e39db172e37792`, 5158 nœuds AST, 1758 relations data-flow, 222 relations call-flow).
+  - `list_browser_targets`, `inspect_web_page` (Evidence ID `ev_c7ea98cfa08c402a05d30420beefcb6e851a8c794777cd8116ff91e21e5d6bf6`), `inspect_web_event_listeners` sur `#drop-zone` (Evidence ID `ev_a1ed61f0b79499f710d55ac01a24397574edd050afc008126ea2bafbba43ea68`) et `observe_web_session` (Evidence ID `ev_6de8a115ba2bc4ccb53a2d0abe14e52b8307be7729131464eca50663e0320c2a`).
+- **Anomalies découvertes & Correctifs appliqués** :
+  1. **Compression redondante et ordre du répertoire central ZIP (`app/archives.py`)** : `inspect_artifact` a révélé que les archives CBZ manga stockent les planches JPEG en `ZIP_STORED` (`compressed_size == declared_size`) mais parfois dans un ordre brut désordonné (`001.jpg`, `003.jpg`, `ComicInfo.xml`, `002.jpg`). `ArchiveHandler.pack` utilise désormais `ZIP_STORED` pour les images déjà compressées (gain CPU immédiat, zéro recompression zlib inutile) et `ZIP_DEFLATED` pour les métadonnées (`ComicInfo.xml`), tout en triant les entrées du répertoire central via `natural_sort_key`.
+  2. **Requête HTTP parasite au chargement (`web/templates/index.html`)** : `observe_web_session` et `inspect_web_page` ont révélé que les balises `<img src="">` vides déclenchaient un second `GET /` inutile au chargement initial. Remplacé par un `data:image/gif;base64,...` 1×1 transparent.
+  3. **Double listener `drop` sur `#drop-zone` (`web/static/js/app.js`)** : `inspect_web_event_listeners` a montré 2 handlers `drop` enregistrés aux lignes 181 et 187, plus des attributs inline `onclick=` sur `#btn-browse-files` et `#btn-browse-folder`. Fusionné en un seul handler `drop` propre et liaison événementielle directe dans `bindUploadInputs()`.
