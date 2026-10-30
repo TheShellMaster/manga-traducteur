@@ -122,13 +122,18 @@ function getProviderOptionsPayload() {
         model = customInput ? customInput.value.trim() : '';
     }
 
+    const qSrc = document.getElementById('quick-src-lang');
+    const qTgt = document.getElementById('quick-tgt-lang');
+    const srcLang = (qSrc ? qSrc.value : '') || document.getElementById('cfg-src-lang').value;
+    const tgtLang = (qTgt ? qTgt.value : '') || document.getElementById('cfg-tgt-lang').value;
+
     return {
         provider,
         api_key: apiKey,
         base_url: baseUrl,
         model: model,
-        src_lang: document.getElementById('cfg-src-lang').value,
-        tgt_lang: document.getElementById('cfg-tgt-lang').value,
+        src_lang: srcLang,
+        tgt_lang: tgtLang,
         font_style: document.getElementById('cfg-font-style').value,
         fixed_font_size: parseInt(document.getElementById('cfg-font-size').value, 10) || 0,
         text_color: document.getElementById('cfg-text-color').value,
@@ -142,11 +147,13 @@ document.addEventListener('DOMContentLoaded', () => {
     initDragAndDrop();
     initSettings();
     initHistory();
+    initHelpModal();
     initNavigation();
     initViewModes();
     initSliderCompare();
     initZoomAndFullscreen();
     initSlowMotionMouseEngine();
+    restoreActiveSessionOnLoad();
 });
 
 // Theme Toggle (Light / Dark) stored in localStorage
@@ -254,6 +261,10 @@ function getDropZoneDefaultHTML() {
 function activateSessionWorkspace(data) {
     currentSession = data;
     currentPageIndex = 0;
+
+    try {
+        localStorage.setItem('active_manga_session', data.session_id);
+    } catch (e) {}
 
     uploadSection.classList.add('hidden');
     workspaceSection.classList.remove('hidden');
@@ -383,6 +394,9 @@ function initNavigation() {
     if (btnNewManga) {
         btnNewManga.addEventListener('click', () => {
             if (pollInterval) clearInterval(pollInterval);
+            try {
+                localStorage.removeItem('active_manga_session');
+            } catch (e) {}
             currentSession = null;
             currentPageIndex = 0;
             uploadSection.classList.remove('hidden');
@@ -393,6 +407,29 @@ function initNavigation() {
             dropZone.innerHTML = getDropZoneDefaultHTML();
             bindUploadInputs();
             showToast('Prêt pour un nouveau manga !', 'info');
+        });
+    }
+
+    // Quick Language Selector synchronization
+    const qSrc = document.getElementById('quick-src-lang');
+    const qTgt = document.getElementById('quick-tgt-lang');
+    const cSrc = document.getElementById('cfg-src-lang');
+    const cTgt = document.getElementById('cfg-tgt-lang');
+    const lblSrc = document.getElementById('lbl-src-lang');
+    const lblTgt = document.getElementById('lbl-tgt-lang');
+
+    if (qSrc && cSrc) {
+        qSrc.addEventListener('change', () => {
+            cSrc.value = qSrc.value;
+            if (lblSrc) lblSrc.textContent = qSrc.options[qSrc.selectedIndex].text.replace(/^[^\s]+\s*/, '');
+            showToast(`Langue source : ${qSrc.value}`, 'info', 2000);
+        });
+    }
+    if (qTgt && cTgt) {
+        qTgt.addEventListener('change', () => {
+            cTgt.value = qTgt.value;
+            if (lblTgt) lblTgt.textContent = qTgt.options[qTgt.selectedIndex].text.replace(/^[^\s]+\s*/, '');
+            showToast(`Langue cible : ${qTgt.value}`, 'info', 2000);
         });
     }
 
@@ -1314,4 +1351,73 @@ function initSlowMotionMouseEngine() {
     }
 
     requestAnimationFrame(animateSlowMo);
+}
+
+// Help & Keyboard Shortcuts Modal
+function initHelpModal() {
+    const btnHelp = document.getElementById('btn-help');
+    const modalHelp = document.getElementById('help-modal');
+    const btnCloseHelp = document.getElementById('btn-close-help');
+    const btnCloseHelpFooter = document.getElementById('btn-close-help-footer');
+
+    if (btnHelp && modalHelp) {
+        btnHelp.addEventListener('click', (e) => {
+            e.preventDefault();
+            modalHelp.classList.remove('hidden');
+        });
+    }
+    if (btnCloseHelp && modalHelp) {
+        btnCloseHelp.addEventListener('click', () => modalHelp.classList.add('hidden'));
+    }
+    if (btnCloseHelpFooter && modalHelp) {
+        btnCloseHelpFooter.addEventListener('click', () => modalHelp.classList.add('hidden'));
+    }
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modalHelp && !modalHelp.classList.contains('hidden')) {
+            modalHelp.classList.add('hidden');
+        }
+    });
+}
+
+// Restore Active Session across Page Reloads (F5 Resilience)
+async function restoreActiveSessionOnLoad() {
+    let savedId = null;
+    try {
+        savedId = localStorage.getItem('active_manga_session');
+    } catch (e) {}
+
+    if (!savedId) return;
+
+    try {
+        const res = await fetch(`/api/session/${savedId}`);
+        if (!res.ok) {
+            localStorage.removeItem('active_manga_session');
+            return;
+        }
+
+        const data = await res.json();
+        activateSessionWorkspace(data);
+
+        // Check if translation is currently running or was finished
+        const statusRes = await fetch(`/api/status/${savedId}`);
+        if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            if (statusData.status === 'translating') {
+                btnStart.classList.add('hidden');
+                progressBanner.classList.remove('hidden');
+                startPolling();
+                showToast(`Session "${data.filename}" restaurée · Traduction en cours reprise`, 'info', 3000);
+            } else if (statusData.status === 'finished') {
+                btnDownload.classList.remove('hidden');
+                btnDownload.onclick = () => {
+                    window.location.href = `/api/download/${savedId}`;
+                };
+                showToast(`Session "${data.filename}" restaurée ✓`, 'success', 2500);
+            } else {
+                showToast(`Session "${data.filename}" restaurée`, 'info', 2000);
+            }
+        }
+    } catch (err) {
+        console.warn("Impossible de restaurer la session précédente:", err);
+    }
 }

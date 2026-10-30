@@ -1,11 +1,11 @@
 /**
  * Manga Translator Studio — Dedicated Animations & Visual FX Engine
- * Authors: Antigravity UI/UX Specialist
  * Features:
  *   - Slow-Motion Mouse-Following Physics Engine (lerp 0.035)
- *   - Ambient Halo & 3D Parallax Manga Glyphs
- *   - Hypnotic Reactive Patience Waves during translation
- *   - 3D Magnetic Card Tilts & Glare
+ *   - Background Vibration Grid & Parallax Manga SFX Badges
+ *   - 3D Animated Manga Book with interactive cursor tracking
+ *   - Hypnotic Reactive Patience Waves & Cyber-Scanner Laser FX
+ *   - 3D Holographic Card Tilts & Glare
  *   - Silky Page Transitions & Button Ripples
  *   - Strict Reduced-Motion & Touch Ergonomics
  */
@@ -13,20 +13,19 @@
 (function () {
     'use strict';
 
-    // Prevent duplicate initialization
     if (window.__mangaAnimationsInitialized) {
         return;
     }
     window.__mangaAnimationsInitialized = true;
 
-    // Accessibility check
+    // Accessibility & Hardware Detection
     const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
 
-    // State & Physics Constants
+    // Physics Constants
     const LERP_PRIMARY = 0.035;   // Soft weightless feel
-    const LERP_DEEP = 0.018;      // Deeper secondary lag
-    const LERP_FAST = 0.065;      // For responsive magnetic items
+    const LERP_DEEP = 0.018;      // Secondary background lag
+    const LERP_SFX = 0.028;       // Onomatopoeia floating lag
 
     let mouseX = window.innerWidth * 0.5;
     let mouseY = window.innerHeight * 0.5;
@@ -41,23 +40,29 @@
     let ambientStage = null;
     let halo = null;
     let glyphs = [];
+    let sfxBadges = [];
+    let mangaBook = null;
     let pageLoader = null;
     let pulseBubble = null;
     let progressBanner = null;
     let dropZone = null;
     let uploadSection = null;
+    let vibrationGrid = null;
 
     function initElements() {
         ambientStage = document.getElementById('slowmo-ambient-stage');
         halo = document.getElementById('slowmo-halo');
         glyphs = Array.from(document.querySelectorAll('.slowmo-glyph'));
+        sfxBadges = Array.from(document.querySelectorAll('.manga-sfx-badge'));
+        mangaBook = document.getElementById('manga-book-3d');
         pageLoader = document.getElementById('page-loader');
         pulseBubble = document.getElementById('slowmo-pulse-bubble');
         progressBanner = document.getElementById('progress-banner');
         dropZone = document.getElementById('drop-zone');
         uploadSection = document.getElementById('upload-section');
+        vibrationGrid = document.getElementById('manga-vibration-grid');
 
-        // Dynamically inject hypnotic ripple canvas into pageLoader if not already present
+        // Dynamically inject ripple canvas if not present
         if (pageLoader && !pageLoader.querySelector('.slowmo-ripple-canvas')) {
             const rippleCanvas = document.createElement('div');
             rippleCanvas.className = 'slowmo-ripple-canvas';
@@ -80,7 +85,7 @@
     }
 
     function setupFloatingParticles() {
-        const particleCount = 8;
+        const particleCount = 10;
         const container = document.createElement('div');
         container.className = 'slowmo-particle-container';
 
@@ -117,16 +122,17 @@
 
         // 1. Smooth Halo Following
         if (halo && !isTouchDevice) {
-            const haloOffsetX = currentX - 300;
-            const haloOffsetY = currentY - 300;
+            const haloOffsetX = currentX - 325;
+            const haloOffsetY = currentY - 325;
             halo.style.transform = `translate3d(${haloOffsetX.toFixed(1)}px, ${haloOffsetY.toFixed(1)}px, 0)`;
         }
 
-        // 2. Parallax Drift on Manga Glyphs & Particles
-        if (glyphs.length > 0 && !isTouchDevice) {
+        // 2. Parallax Drift on Manga Glyphs, Onomatopoeias & Particles
+        if (!isTouchDevice) {
             const centerX = winWidth * 0.5;
             const centerY = winHeight * 0.5;
-            
+
+            // Manga Glyphs
             glyphs.forEach((g, idx) => {
                 const depth = parseFloat(g.dataset.depth || '0.05');
                 const offsetX = (slowX - centerX) * depth * 8;
@@ -135,7 +141,16 @@
                 g.style.transform = `translate3d(${offsetX.toFixed(1)}px, ${offsetY.toFixed(1)}px, 0) rotate(${rot.toFixed(1)}deg)`;
             });
 
-            // Particles floating drift
+            // Onomatopoeias (SFX) with 3D Parallax & slight tilt
+            sfxBadges.forEach((sfx, idx) => {
+                const depth = parseFloat(sfx.dataset.depth || '1.0');
+                const offsetX = (slowX - centerX) * depth * 0.04;
+                const offsetY = (slowY - centerY) * depth * 0.04;
+                const rot = (normX * 8) + (idx === 0 ? -6 : idx === 1 ? 4 : 2);
+                sfx.style.transform = `translate3d(${offsetX.toFixed(1)}px, ${offsetY.toFixed(1)}px, 0) rotate(${rot.toFixed(1)}deg)`;
+            });
+
+            // Ambient floating particles
             const particles = ambientStage ? ambientStage.querySelectorAll('.slowmo-particle') : [];
             particles.forEach((p, idx) => {
                 const depth = parseFloat(p.dataset.depth || '0.02');
@@ -149,27 +164,31 @@
             });
         }
 
-        // 3. Hypnotic Patience Dynamics (Page Loader & Banner)
-        const isTranslating = (pageLoader && !pageLoader.classList.contains('hidden')) ||
-                              (progressBanner && !progressBanner.classList.contains('hidden'));
+        // 3. Manga Book 3D Interactive Reaction
+        if (mangaBook && uploadSection && !uploadSection.classList.contains('hidden') && !isTouchDevice) {
+            const bookTiltX = (24 - normY * 18).toFixed(1);
+            const bookTiltY = (-20 + normX * 22).toFixed(1);
+            mangaBook.style.transform = `rotateX(${bookTiltX}deg) rotateY(${bookTiltY}deg) rotateZ(3deg)`;
+        }
 
+        // 4. Hypnotic Patience Dynamics (Page Loader)
         if (pulseBubble && pageLoader && !pageLoader.classList.contains('hidden') && !isTouchDevice) {
-            const pullX = normX * 24;
-            const pullY = normY * 24;
+            const pullX = normX * 26;
+            const pullY = normY * 26;
             pulseBubble.style.transform = `translate3d(${pullX.toFixed(1)}px, ${pullY.toFixed(1)}px, 0)`;
         }
 
-        // 4. Subtle 3D Magnetic Tilt on Drop Zone
+        // 5. 3D Magnetic Tilt on Drop Zone
         if (dropZone && uploadSection && !uploadSection.classList.contains('hidden') && !isTouchDevice) {
-            const tiltX = (-normY * 4.2).toFixed(2);
-            const tiltY = (normX * 4.2).toFixed(2);
+            const tiltX = (-normY * 4.5).toFixed(2);
+            const tiltY = (normX * 4.5).toFixed(2);
             dropZone.style.transform = `perspective(1100px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
         }
 
         rafId = requestAnimationFrame(physicsTick);
     }
 
-    // Event Listeners for Mouse Tracking
+    // Event Listeners for User Interaction
     function setupInteractions() {
         if (prefersReducedMotion || isTouchDevice) {
             return;
@@ -189,14 +208,6 @@
             }
         }, { passive: true });
 
-        // Magnetic Thumbnails
-        document.addEventListener('mouseover', (e) => {
-            const thumb = e.target.closest('.thumbnail-item');
-            if (thumb && !isTouchDevice) {
-                thumb.style.willChange = 'transform, box-shadow';
-            }
-        });
-
         // Button Ripple Effect
         document.addEventListener('click', (e) => {
             const btn = e.target.closest('.btn');
@@ -208,7 +219,7 @@
         // Manga Image Cross-Fade Interceptor
         setupImageTransitions();
 
-        // Page Visibility Lifecycle: pause ticker when backgrounded to save 100% CPU/GPU
+        // Lifecycle: pause ticker when tab is backgrounded
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 isRunning = false;
@@ -251,10 +262,8 @@
             if (!img) return;
 
             img.addEventListener('load', () => {
-                // Ignore transparent data URIs
                 if (img.src && img.src.startsWith('data:image/gif')) return;
                 img.classList.remove('manga-page-fade');
-                // Trigger reflow to restart CSS animation smoothly
                 void img.offsetWidth;
                 img.classList.add('manga-page-fade');
             });
@@ -279,12 +288,10 @@
         }
     };
 
-    // Override global initSlowMotionMouseEngine so app.js calls this seamlessly
     window.initSlowMotionMouseEngine = function () {
         window.MangaAnimations.init();
     };
 
-    // Auto-bootstrap on DOMContentLoaded
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             window.MangaAnimations.init();

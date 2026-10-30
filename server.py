@@ -1,10 +1,12 @@
 import asyncio
+import concurrent.futures
 import gc
 import io
 import json
 import os
 import shutil
 import tempfile
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -524,52 +526,76 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
 
     # Inter-page context memory: last 8 translated lines across previous pages
     context_history: List[Dict[str, str]] = []
+    context_lock = threading.Lock()
+    last_model = "Cloud Vision"
+    completed_count = 0
 
-    for idx in range(total):
+    # Multi-page parallel translation (concurrency = 2 or 3 workers)
+    concurrency = min(3, max(1, total))
+    concurrency = int(options.get("concurrency") or concurrency)
+
+    def _worker_task(page_idx: int):
         if session.get("cancelled"):
-            session["status"] = "cancelled"
-            session["current_log"] = f"Traduction annulée à la page {idx + 1}/{total}."
-            return
-
-        session["current_page"] = idx + 1
-        session["progress_percent"] = round((idx / total) * 100) if total > 0 else 100
-        session["current_log"] = f"Analyse et traduction de la page {idx + 1} / {total}..."
-
+            return None
+        with context_lock:
+            ctx_snapshot = list(context_history[-8:])
         res = _translate_single_page(
             session=session,
-            idx=idx,
+            idx=page_idx,
             client=client,
             tgt_lang=tgt_lang,
             font_style=font_style,
             fixed_font_size=fixed_font_size,
             text_color=text_color,
             mask_style=mask_style,
-            context_history=context_history[-8:],
+            context_history=ctx_snapshot,
         )
-        if res.get("status") == "done":
-            last_model = res.get("model", "Cloud Vision")
-            last_blocks = res.get("blocks", [])
-            for b in last_blocks:
-                if b.get("original") or b.get("translation"):
-                    context_history.append({
-                        "original": b.get("original", ""),
-                        "translation": b.get("translation", ""),
-                    })
-            if len(context_history) > 8:
-                context_history = context_history[-8:]
+        return page_idx, res
 
-            # Live LLM translation feed
-            if last_blocks:
-                sample_b = last_blocks[0]
-                orig_snippet = sample_b.get("original", "")[:35]
-                trans_snippet = sample_b.get("translation", "")[:40]
-                session["last_bubble"] = {
-                    "page": idx + 1,
-                    "original": orig_snippet,
-                    "translation": trans_snippet,
-                    "model": last_model,
-                }
-                session["current_log"] = f"[{last_model}] Page {idx + 1}/{total} : « {orig_snippet} » ➜ « {trans_snippet} »"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
+        futures = {executor.submit(_worker_task, p_idx): p_idx for p_idx in range(total)}
+        for future in concurrent.futures.as_completed(futures):
+            if session.get("cancelled"):
+                session["status"] = "cancelled"
+                session["current_log"] = "Traduction annulée."
+                executor.shutdown(wait=False, cancel_futures=True)
+                return
+
+            try:
+                result = future.result()
+                if not result:
+                    continue
+                p_idx, res = result
+                completed_count += 1
+                session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
+
+                if res.get("status") == "done":
+                    last_model = res.get("model", "Cloud Vision")
+                    last_blocks = res.get("blocks", [])
+                    with context_lock:
+                        for b in last_blocks:
+                            if b.get("original") or b.get("translation"):
+                                context_history.append({
+                                    "original": b.get("original", ""),
+                                    "translation": b.get("translation", ""),
+                                })
+                        if len(context_history) > 12:
+                            context_history = context_history[-12:]
+
+                    if last_blocks:
+                        sample_b = last_blocks[0]
+                        orig_snippet = sample_b.get("original", "")[:35]
+                        trans_snippet = sample_b.get("translation", "")[:40]
+                        session["last_bubble"] = {
+                            "page": p_idx + 1,
+                            "original": orig_snippet,
+                            "translation": trans_snippet,
+                            "model": last_model,
+                        }
+                        session["current_log"] = f"[{last_model}] Page {p_idx + 1}/{total} : « {orig_snippet} » ➜ « {trans_snippet} » ({completed_count}/{total} terminées)"
+            except Exception as e:
+                completed_count += 1
+                session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
 
     session["status"] = "finished"
     session["progress_percent"] = 100
