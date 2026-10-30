@@ -547,5 +547,13 @@ def test_system_check_update_endpoint():
     assert data["version"] == "2.1.0"
 
 
+def test_system_shutdown_endpoint():
+    res = client.post("/api/system/shutdown")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "ok"
+    assert "extinction" in data["message"].lower()
+
+
 
 

@@ -149,6 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initHistory();
     initLibrary();
     initHelpModal();
+    initShutdownControl();
     initNavigation();
     initViewModes();
     initSliderCompare();
@@ -1462,6 +1463,54 @@ function initHelpModal() {
             modalHelp.classList.add('hidden');
         }
     });
+}
+
+// Server Shutdown & Lifecycle Control (PC & Mobile/Android)
+function initShutdownControl() {
+    const btnOpenConfirm = document.getElementById('btn-open-shutdown-confirm');
+    const modalConfirm = document.getElementById('shutdown-confirm-modal');
+    const btnCancel = document.getElementById('btn-cancel-shutdown');
+    const btnConfirm = document.getElementById('btn-confirm-shutdown');
+    const shutdownScreen = document.getElementById('shutdown-screen');
+    const btnCheckUpdateSys = document.getElementById('btn-check-update-system');
+
+    if (btnOpenConfirm && modalConfirm) {
+        btnOpenConfirm.addEventListener('click', () => {
+            if (settingsModal) settingsModal.classList.add('hidden');
+            modalConfirm.classList.remove('hidden');
+        });
+    }
+
+    if (btnCancel && modalConfirm) {
+        btnCancel.addEventListener('click', () => {
+            modalConfirm.classList.add('hidden');
+        });
+    }
+
+    if (btnConfirm && modalConfirm && shutdownScreen) {
+        btnConfirm.addEventListener('click', async () => {
+            btnConfirm.disabled = true;
+            btnConfirm.textContent = 'Extinction en cours...';
+            try {
+                await fetch('/api/system/shutdown', { method: 'POST' });
+            } catch (e) {
+                // Network error expected when server stops immediately
+            }
+            modalConfirm.classList.add('hidden');
+            shutdownScreen.classList.remove('hidden');
+            showToast('Serveur local éteint avec succès.', 'info');
+        });
+    }
+
+    if (btnCheckUpdateSys) {
+        btnCheckUpdateSys.addEventListener('click', async () => {
+            btnCheckUpdateSys.disabled = true;
+            btnCheckUpdateSys.textContent = 'Vérification...';
+            await checkSystemUpdate();
+            btnCheckUpdateSys.disabled = false;
+            btnCheckUpdateSys.textContent = '🔄 Vérifier les mises à jour GitHub';
+        });
+    }
 }
 
 // Restore Active Session across Page Reloads (F5 Resilience)

@@ -23,7 +23,15 @@ if [ -d "venv" ]; then
     source venv/bin/activate
 fi
 
-# 3. Open browser after 1.5s
+# 3. Launch System Tray icon in background if graphical desktop is available
+if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+    if ! pgrep -f "app/tray.py" >/dev/null 2>&1; then
+        echo "==> Lancement de l'icône dans la barre des tâches..."
+        python app/tray.py >/dev/null 2>&1 &
+    fi
+fi
+
+# 4. Open browser after 1.5s
 (sleep 1.5 && (xdg-open http://localhost:8000 2>/dev/null || sensible-browser http://localhost:8000 2>/dev/null || true)) &
 
 # 4. Launch FastAPI server

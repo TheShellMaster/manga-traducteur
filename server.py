@@ -225,6 +225,34 @@ async def check_system_update():
     }
 
 
+@app.post("/api/system/shutdown")
+def shutdown_system_server():
+    """
+    Arrête proprement le serveur local Manga Translator Studio.
+    Accessible depuis l'interface Web (PC & Mobile/Android) ou via script.
+    """
+    import os
+    import signal
+    import threading
+    import time
+
+    def _delayed_exit():
+        # En mode test unitaire pytest, ne pas couper le runner
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            return
+        time.sleep(0.5)
+        try:
+            os.kill(os.getpid(), signal.SIGTERM)
+        except Exception:
+            pass
+
+    threading.Thread(target=_delayed_exit, daemon=True).start()
+    return {
+        "status": "ok",
+        "message": "Le serveur Manga Translator Studio est en cours d'extinction propre."
+    }
+
+
 @app.get("/api/session/{session_id}")
 def get_session_data(session_id: str):
     session = sessions.get(session_id)

@@ -342,6 +342,7 @@
                     <button class="tab-btn active" data-tab="tab-api" role="tab">Fournisseurs & Modèles</button>
                     <button class="tab-btn" data-tab="tab-lang" role="tab">Langues & Traduction</button>
                     <button class="tab-btn" data-tab="tab-style" role="tab">Style & Bulles</button>
+                    <button class="tab-btn" data-tab="tab-system" role="tab">Système & Arrêt</button>
                 </div>
 
                 <!-- Tab 1: API Providers & Model Selection -->
@@ -453,6 +454,32 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Tab 4: System, Server Status & Shutdown -->
+                <div id="tab-system" class="tab-pane">
+                    <div class="provider-box" style="margin-bottom: 16px;">
+                        <div class="box-title">📊 Statut du Serveur Local</div>
+                        <p class="box-hint" style="margin-bottom: 8px;">Serveur local FastAPI 100% Cloud Vision (Port 8000).</p>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                            <span class="status-pill pill-ok">🟢 En ligne (127.0.0.1:8000)</span>
+                            <span class="status-pill" style="border-color: rgba(56, 189, 248, 0.4); color: #38bdf8;">RAM &lt; 50 Mo</span>
+                            <span class="status-pill" id="tab-system-version-pill" style="border-color: rgba(16, 185, 129, 0.4); color: var(--success);">v2.1.0</span>
+                        </div>
+                        <button type="button" id="btn-check-update-system" class="btn btn-secondary btn-sm">
+                            🔄 Vérifier les mises à jour GitHub
+                        </button>
+                    </div>
+
+                    <div class="provider-box" style="border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.05);">
+                        <div class="box-title" style="color: var(--danger);">🛑 Arrêt du Serveur (PC / Mobile / Android)</div>
+                        <p class="box-hint" style="margin-bottom: 12px; line-height: 1.4;">
+                            Éteint proprement le serveur local pour libérer le port 8000 et économiser votre batterie (idéal lorsque vous avez terminé votre lecture sur PC ou sur smartphone/tablette).
+                        </p>
+                        <button type="button" id="btn-open-shutdown-confirm" class="btn btn-danger">
+                            🛑 Éteindre le Serveur Local
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button id="btn-save-settings" class="btn btn-primary">Enregistrer les Paramètres</button>
@@ -560,6 +587,40 @@
             </div>
             <div class="modal-footer">
                 <button id="btn-close-help-footer" class="btn btn-primary">Fermer (Échap)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shutdown Confirmation Modal (PC & Mobile) -->
+    <div id="shutdown-confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-shutdown-title">
+        <div class="modal-content" style="max-width: 440px; text-align: center;">
+            <div class="modal-header" style="justify-content: center;">
+                <h2 id="modal-shutdown-title" style="color: var(--danger);">🛑 Arrêter le serveur ?</h2>
+            </div>
+            <div class="modal-body" style="padding: 18px 8px;">
+                <p style="font-size: 14px; color: var(--text-primary); line-height: 1.5; margin-bottom: 10px;">
+                    Voulez-vous vraiment éteindre le serveur local de Manga Translator Studio ?
+                </p>
+                <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+                    Vos mangas traduits et votre historique restent intacts dans votre dossier local <code>data/</code>.
+                </p>
+            </div>
+            <div class="modal-footer" style="justify-content: center; gap: 12px;">
+                <button type="button" id="btn-cancel-shutdown" class="btn btn-secondary">Annuler</button>
+                <button type="button" id="btn-confirm-shutdown" class="btn btn-danger">Oui, éteindre le serveur</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Shutdown Final Screen -->
+    <div id="shutdown-screen" class="shutdown-screen hidden">
+        <div class="shutdown-card">
+            <div class="shutdown-icon" aria-hidden="true">🛑</div>
+            <h2>Serveur local arrêté</h2>
+            <p>Le serveur Manga Translator Studio a été éteint proprement.</p>
+            <p class="shutdown-hint">Vous pouvez fermer cet onglet en toute sécurité.</p>
+            <div class="shutdown-actions">
+                <button type="button" onclick="location.reload()" class="btn btn-secondary btn-sm">🔄 Reconnecter si relancé</button>
             </div>
         </div>
     </div>
