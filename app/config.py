@@ -102,6 +102,26 @@ PROVIDER_PRESETS = {
         ],
         "default_model": "pixtral-12b-2409",
     },
+    "groq": {
+        "name": "Groq (Inférence ultra-rapide LPU)",
+        "base_url": "https://api.groq.com/openai/v1",
+        "models": [
+            {"id": "qwen/qwen3.8-27b", "label": "Qwen 3.8 27B Vision (Groq LPU ultra-rapide)"},
+            {"id": "llama-3.2-11b-vision-preview", "label": "Llama 3.2 11B Vision (Rapide)"},
+            {"id": "llama-3.2-90b-vision-preview", "label": "Llama 3.2 90B Vision (Précis)"},
+        ],
+        "default_model": "qwen/qwen3.8-27b",
+    },
+    "ollama": {
+        "name": "Ollama Cloud / Local",
+        "base_url": "https://ollama.com/v1",
+        "models": [
+            {"id": "gemma4:31b", "label": "Gemma 4 31B Vision (Ollama Cloud)"},
+            {"id": "nemotron-3-nano:30b", "label": "Nemotron 3 Nano (Ollama Cloud)"},
+            {"id": "llama3.2-vision:latest", "label": "Llama 3.2 Vision (Local / Cloud)"},
+        ],
+        "default_model": "gemma4:31b",
+    },
     "nvidia": {
         "name": "NVIDIA NIM (Inférence Vision)",
         "base_url": "https://integrate.api.nvidia.com/v1",

@@ -32,9 +32,14 @@ def build_system_prompt(
             + "\n"
         )
     return f"""You are an expert manga and comic translator.
-Analyze this manga page image and detect every speech bubble, thought bubble, caption, narration box, and readable text block.
+Analyze this manga page image and detect EVERY speech bubble, thought bubble, caption, narration box, and readable dialogue block.
 {ctx_block}
-Return ONLY a valid JSON array, with no surrounding markdown or commentary:
+CRITICAL INSTRUCTIONS:
+1. EXHAUSTIVE DETECTION: Scan the entire page thoroughly from top to bottom and right to left. Many pages contain between 6 and 20 dialogue bubbles across multiple panels (top, middle, and bottom). You MUST detect every single dialogue bubble on the page. Do NOT omit or truncate the bottom panels.
+2. Transcribe the ACTUAL text seen on the image into "original". DO NOT use placeholder text.
+3. Translate into natural, fluent, idiomatic spoken {tgt_lang} into "translation".
+
+Return ONLY a valid JSON array of objects:
 [
   {{
     "x": 100,
@@ -42,8 +47,8 @@ Return ONLY a valid JSON array, with no surrounding markdown or commentary:
     "w": 200,
     "h": 120,
     "type": "speech",
-    "original": "<original {src_lang} text>",
-    "translation": "<natural spoken {tgt_lang} translation>"
+    "original": "Actual text read on the page",
+    "translation": "Traduction naturelle en {tgt_lang}"
   }}
 ]
 
@@ -53,10 +58,9 @@ Rules:
    - w, h: width and height of the text block (x + w <= 1000, y + h <= 1000)
    - "type": one of "speech", "thought", "narration", "sfx"
 2. Follow standard manga reading order: right-to-left, top-to-bottom.
-3. Translate into natural, fluent, idiomatic spoken {tgt_lang} suitable for comic speech bubbles.
-4. Ignore tiny watermarks, page numbers, credits, or scanlation logos.
-5. DO NOT copy example bounding boxes or coordinates. You MUST compute the exact bounding box (x, y, w, h) specifically for each distinct speech bubble detected on the image.
-6. Strictly output ONLY the JSON array."""
+3. Ignore tiny watermark credits or scanlation team logos.
+4. Compute precise bounding boxes specifically for each distinct bubble.
+5. Strictly output ONLY the JSON array."""
 
 
 def encode_image_for_vision(img: Image.Image, max_side: int = 1600) -> Tuple[bytes, str]:
@@ -437,11 +441,14 @@ class CloudVisionClient:
                         break
             return None
 
-        def _try_ollama() -> Optional[Tuple[List[Dict[str, Any]], str]]:
+        def _try_ollama(models: Optional[List[str]] = None) -> Optional[Tuple[List[Dict[str, Any]], str]]:
             ollama_key = (self.api_key if self.provider == "ollama" else None) or os.environ.get("OLLAMA_API_KEY")
             if not ollama_key:
                 return None
-            for m in ("gemma4:31b", "nemotron-3-nano:30b"):
+            models_to_try = models or (
+                [self.model] if (self.model and self.provider == "ollama") else ["gemma4:31b", "nemotron-3-nano:30b"]
+            )
+            for m in models_to_try:
                 try:
                     blocks = self._call_openai_compatible(
                         b64_str=b64_str,
@@ -535,6 +542,15 @@ class CloudVisionClient:
             if res:
                 return res
             for fallback in (_try_nvidia_nim, _try_openrouter, _try_ollama, _try_gemini, _try_anthropic):
+                res = fallback()
+                if res:
+                    return res
+
+        elif self.provider == "ollama":
+            res = _try_ollama()
+            if res:
+                return res
+            for fallback in (_try_nvidia_nim, _try_openrouter, _try_groq, _try_gemini, _try_anthropic):
                 res = fallback()
                 if res:
                     return res

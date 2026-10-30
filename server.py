@@ -386,7 +386,7 @@ def get_settings():
         "presets": PROVIDER_PRESETS,
         "configured": {
             p: bool(os.environ.get(f"{p.upper()}_API_KEY"))
-            for p in ("gemini", "openrouter", "groq", "openai", "mistral", "nvidia", "custom")
+            for p in ("gemini", "openrouter", "groq", "openai", "mistral", "nvidia", "ollama", "custom")
         },
     }
 
@@ -517,6 +517,18 @@ async def fetch_provider_models_api(payload: Dict[str, Any]):
                             models_list.append({"id": mid, "label": mid, "is_free": False})
                 else:
                     models_list = PROVIDER_PRESETS.get("nvidia", {}).get("models", [])
+
+            elif provider == "ollama":
+                target_url = (base_url or "https://ollama.com/v1").rstrip("/") + "/models"
+                headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+                resp = await client.get(target_url, headers=headers)
+                if resp.status_code == 200:
+                    d = resp.json()
+                    for m in d.get("data", []):
+                        mid = m.get("id", "")
+                        models_list.append({"id": mid, "label": f"{mid} (Ollama)", "is_free": False})
+                else:
+                    models_list = PROVIDER_PRESETS.get("ollama", {}).get("models", [])
 
             else:
                 # Custom or Ollama local/cloud endpoint
@@ -1255,3 +1267,150 @@ def download_translated_manga(session_id: str):
         pass
 
     return FileResponse(out_path, filename=out_name, media_type="application/octet-stream")
+
+
+def _dir_size(path: Path) -> int:
+    if not path.exists():
+        return 0
+    total = 0
+    for p in path.rglob("*"):
+        if p.is_file():
+            try:
+                total += p.stat().st_size
+            except Exception:
+                pass
+    return total
+
+
+def _format_size(size_bytes: int) -> str:
+    if size_bytes < 1024:
+        return f"{size_bytes} o"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} Ko"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} Mo"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} Go"
+
+
+@app.get("/api/system/storage")
+def get_storage_stats():
+    cache_sz = _dir_size(CACHE_DIR)
+    sessions_sz = _dir_size(SESSIONS_DIR)
+    output_sz = _dir_size(OUTPUT_DIR)
+    history_count = 0
+    history_file = BASE_DIR / "history" / "sessions.json"
+    if history_file.exists():
+        try:
+            hdata = json.loads(history_file.read_text(encoding="utf-8"))
+            history_count = len(hdata) if isinstance(hdata, list) else 0
+        except Exception:
+            pass
+    total_sz = cache_sz + sessions_sz + output_sz
+    storage_dir = os.environ.get("MTS_STORAGE_DIR", str(BASE_DIR / "data"))
+
+    return {
+        "status": "ok",
+        "storage_dir": storage_dir,
+        "sizes": {
+            "cache_bytes": cache_sz,
+            "cache_human": _format_size(cache_sz),
+            "sessions_bytes": sessions_sz,
+            "sessions_human": _format_size(sessions_sz),
+            "output_bytes": output_sz,
+            "output_human": _format_size(output_sz),
+            "history_count": history_count,
+            "total_bytes": total_sz,
+            "total_human": _format_size(total_sz),
+        },
+    }
+
+
+@app.post("/api/system/storage/purge")
+def purge_storage(payload: Dict[str, Any]):
+    target = payload.get("target", "all")
+    keep_sid = payload.get("keep_session_id")
+    freed_bytes = 0
+    history_file = BASE_DIR / "history" / "sessions.json"
+
+    # 1. Purge OCR cache
+    if target in ("cache", "all"):
+        if CACHE_DIR.exists():
+            for f in CACHE_DIR.glob("*.json"):
+                try:
+                    freed_bytes += f.stat().st_size
+                    f.unlink()
+                except Exception:
+                    pass
+
+    # 2. Purge past sessions (keep active sessions)
+    if target in ("sessions", "all"):
+        if SESSIONS_DIR.exists():
+            active_sids = set(sessions.keys())
+            if keep_sid:
+                active_sids.add(keep_sid)
+            for s_folder in SESSIONS_DIR.iterdir():
+                if s_folder.is_dir() and s_folder.name not in active_sids:
+                    sz = _dir_size(s_folder)
+                    try:
+                        shutil.rmtree(s_folder)
+                        freed_bytes += sz
+                    except Exception:
+                        pass
+
+    # 3. Purge output translated files
+    if target in ("output", "all"):
+        if OUTPUT_DIR.exists():
+            for f in OUTPUT_DIR.iterdir():
+                if f.is_file():
+                    try:
+                        freed_bytes += f.stat().st_size
+                        f.unlink()
+                    except Exception:
+                        pass
+
+    # 4. Purge history
+    if target in ("history", "all"):
+        if history_file.exists():
+            try:
+                if keep_sid:
+                    try:
+                        hdata = json.loads(history_file.read_text(encoding="utf-8"))
+                        kept = [entry for entry in hdata if entry.get("session_id") == keep_sid]
+                        history_file.write_text(json.dumps(kept, indent=2, ensure_ascii=False), encoding="utf-8")
+                    except Exception:
+                        history_file.write_text("[]\n", encoding="utf-8")
+                else:
+                    history_file.write_text("[]\n", encoding="utf-8")
+            except Exception:
+                pass
+
+    return {
+        "status": "ok",
+        "freed_bytes": freed_bytes,
+        "freed_human": _format_size(freed_bytes),
+        "target": target,
+    }
+
+
+@app.post("/api/system/storage/directory")
+def update_storage_directory(payload: Dict[str, Any]):
+    new_dir = str(payload.get("storage_dir", "")).strip()
+    if not new_dir:
+        raise HTTPException(status_code=400, detail="Chemin de répertoire invalide")
+    target_path = Path(new_dir).expanduser().resolve()
+    try:
+        target_path.mkdir(parents=True, exist_ok=True)
+        # Test write permission
+        test_file = target_path / ".mts_write_test"
+        test_file.write_text("test")
+        test_file.unlink()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Impossible d'écrire dans ce dossier : {e}")
+
+    save_env_key("MTS_STORAGE_DIR", str(target_path))
+    return {
+        "status": "ok",
+        "storage_dir": str(target_path),
+        "message": f"Dossier de stockage configuré avec succès : {target_path}",
+    }

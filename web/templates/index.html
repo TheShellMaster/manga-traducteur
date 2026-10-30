@@ -10,6 +10,17 @@
   <link rel="stylesheet" href="/static/css/style.css?v=4">
 </head>
 <body>
+  <!-- Arrière-plan cinématique 3D avec éléments flottants discrets -->
+  <div class="floating-bg" id="floating-bg" aria-hidden="true">
+    <div class="float-item float-up bubble-1">💬</div>
+    <div class="float-item float-down kanji-1">巻</div>
+    <div class="float-item float-up card-1"></div>
+    <div class="float-item float-down bubble-2">💭</div>
+    <div class="float-item float-up kanji-2">話</div>
+    <div class="float-item float-down card-2"></div>
+    <div class="float-item float-up bubble-3">🗯️</div>
+    <div class="float-item float-down card-3"></div>
+  </div>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></symbol>
     <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
@@ -60,6 +71,18 @@
             <div class="drop-actions">
               <button class="btn primary" id="btn-pick-file"><svg><use href="#i-file"/></svg>Choisir un fichier</button>
               <button class="btn ghost" id="btn-pick-folder"><svg><use href="#i-folder"/></svg>Choisir un dossier</button>
+            </div>
+            <div class="extract-anim-overlay hidden" id="extract-anim-overlay" aria-hidden="true">
+              <div class="extract-cube">
+                <div class="cube-face cube-front"></div>
+                <div class="cube-face cube-back"></div>
+                <div class="cube-face cube-right"></div>
+                <div class="cube-face cube-left"></div>
+                <div class="cube-face cube-top"></div>
+                <div class="cube-face cube-bottom"></div>
+              </div>
+              <p class="extract-title">Extraction 3D du manga en cours...</p>
+              <span class="extract-sub" id="extract-count-sub">Décompression des planches</span>
             </div>
             <input type="file" id="file-input" accept=".cbz,.cbr,.zip,.rar,.jpg,.jpeg,.png,.webp" hidden>
             <input type="file" id="folder-input" webkitdirectory directory multiple hidden>
@@ -254,6 +277,7 @@
         <button class="active" data-stab="engine">Service de traduction</button>
         <button data-stab="lang">Langues</button>
         <button data-stab="look">Apparence</button>
+        <button data-stab="storage">Stockage & Mémoire</button>
       </div>
       <div class="modal-body">
         <div class="stab active" id="stab-engine">
@@ -304,6 +328,51 @@
           <div class="field">
             <label for="text-color">Couleur du texte</label>
             <div class="row"><input type="color" id="text-color" value="#000000"><span class="muted small">Le mode automatique passe en blanc sur les fonds sombres.</span></div>
+          </div>
+        </div>
+
+        <div class="stab" id="stab-storage">
+          <div class="storage-summary-card">
+            <div class="storage-head-info">
+              <div>
+                <b class="storage-total-title">Espace Disque Utilisé</b>
+                <p class="muted small" id="storage-dir-display">Dossier : data/</p>
+              </div>
+              <div class="storage-total-badge" id="storage-total-badge">-</div>
+            </div>
+            <div class="storage-breakdown-grid">
+              <div class="storage-metric-box">
+                <span class="metric-label">Cache OCR & Vision</span>
+                <b class="metric-val" id="storage-cache-val">-</b>
+                <small class="muted">Blocs détectés réutilisables</small>
+                <button type="button" class="btn ghost sm danger-hover" id="btn-purge-cache">Vider le cache</button>
+              </div>
+              <div class="storage-metric-box">
+                <span class="metric-label">Sessions de travail</span>
+                <b class="metric-val" id="storage-sessions-val">-</b>
+                <small class="muted">Pages temporaires extraites</small>
+                <button type="button" class="btn ghost sm danger-hover" id="btn-purge-sessions">Purger les sessions</button>
+              </div>
+              <div class="storage-metric-box">
+                <span class="metric-label">Bibliothèque / Exports</span>
+                <b class="metric-val" id="storage-output-val">-</b>
+                <small class="muted">Mangas traduits prêts</small>
+                <button type="button" class="btn ghost sm danger-hover" id="btn-purge-output">Purger les exports</button>
+              </div>
+            </div>
+            <div class="storage-actions-row">
+              <button type="button" class="btn ghost sm" id="btn-purge-history">Effacer l'historique</button>
+              <button type="button" class="btn danger sm" id="btn-purge-all">🧹 Nettoyage Global (Tout purger)</button>
+            </div>
+          </div>
+
+          <div class="field" style="margin-top: 1.25rem;">
+            <label for="storage-dir-input">Dossier de stockage persistant (Projets & Appareil)</label>
+            <p class="muted small">Emplacement où l'application sauvegarde vos scans de chapitres. Si vous revenez retoucher ou rescanner une planche plus tard, vous ne recommencez pas de zéro et ne repayez pas l'IA.</p>
+            <div class="row">
+              <input type="text" id="storage-dir-input" placeholder="/chemin/vers/votre/dossier">
+              <button type="button" class="btn ghost sm" id="btn-save-storage-dir">Définir</button>
+            </div>
           </div>
         </div>
       </div>

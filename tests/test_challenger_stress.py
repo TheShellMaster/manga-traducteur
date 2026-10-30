@@ -355,16 +355,16 @@ class TestChallengerQuotaExhaustionFailover:
         instantiating CloudVisionClient() triggers load_env(), which reads the workspace .env.
         Even if .env contains 'NVIDIA_API_KEY=', load_env() preserves the existing environment variable.
         """
-        test_key_val = "nvapi-test-environment-injection-key"
-        os.environ["NVIDIA_API_KEY"] = test_key_val
-        assert os.environ.get("NVIDIA_API_KEY") == test_key_val
+        test_key_val = "gemini-test-environment-injection-key"
+        os.environ["GEMINI_API_KEY"] = test_key_val
+        assert os.environ.get("GEMINI_API_KEY") == test_key_val
 
         # Creating CloudVisionClient triggers load_env()
         c = CloudVisionClient()
 
-        # Defect C1 resolved: os.environ["NVIDIA_API_KEY"] is preserved intact
-        preserved_val = os.environ.get("NVIDIA_API_KEY")
-        assert preserved_val == test_key_val, "Defect C1 resolved: load_env() preserved NVIDIA_API_KEY"
+        # Defect C1 resolved: os.environ["GEMINI_API_KEY"] is preserved intact because .env has GEMINI_API_KEY=
+        preserved_val = os.environ.get("GEMINI_API_KEY")
+        assert preserved_val == test_key_val, "Defect C1 resolved: load_env() preserved empty .env keys from clobbering environ"
 
 
 # =====================================================================
