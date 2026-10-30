@@ -88,6 +88,22 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .tab { position: relative; z-index: 1; padding: 7px 16px; border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--muted); transition: color .2s; }
 .tab.active, .tab:hover { color: var(--text); }
 .tab-indicator { position: absolute; top: 4px; bottom: 4px; left: 0; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line-2); transition: transform .35s var(--ease), width .35s var(--ease); }
+
+/* ---------- API Status Pills ---------- */
+.top-api-status { display: flex; align-items: center; gap: 6px; }
+.api-pill {
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px;
+  border-radius: 99px; font-size: 11px; font-weight: 600; text-decoration: none;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+  cursor: pointer; transition: all .2s;
+}
+.api-pill:hover { border-color: var(--line-2); color: var(--text); }
+.api-pill.ok { background: rgba(62, 207, 142, .12); border-color: rgba(62, 207, 142, .35); color: var(--ok); }
+.api-pill.missing { opacity: .55; }
+.home-api-pills { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; animation: rise .6s .15s var(--ease) both; }
+.model-pick { display: flex; align-items: center; gap: 6px; }
+.model-pick-icon { font-size: 14px; color: var(--warn); }
+.model-pick select { max-width: 260px; font-size: 13px; font-weight: 500; }
 .top-actions { display: flex; gap: 4px; }
 
 .views { flex: 1; min-height: 0; position: relative; }
@@ -334,6 +350,7 @@ input[type=color] { width: 44px; height: 36px; border: 1px solid var(--line); bo
   body { overflow: auto; }
   .topbar { gap: 10px; padding: 0 12px; height: 56px; }
   .brand-name { display: none; }
+  .top-api-status { display: none; }
   .tabs { margin: 0 auto; }
   .tab { padding: 7px 11px; font-size: 13px; }
   .studio { height: auto; min-height: 100%; padding: 12px; }

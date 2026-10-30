@@ -112,22 +112,159 @@
 
   function engineReady() {
     const s = state.settings;
-    return s.provider && s.provider !== "auto" && s.selected_model && (s.configured?.[s.provider] || s.provider === "custom");
+    if (!s) return false;
+    if (s.provider && s.provider !== "auto") {
+      return Boolean(s.configured?.[s.provider] || s.provider === "custom");
+    }
+    // Mode "auto" : prêt si AU MOINS UN fournisseur est configuré dans l'environnement !
+    return Object.entries(s.configured || {}).some(([k, v]) => v && k !== "custom");
+  }
+
+  function getActiveEngineLabel() {
+    const s = state.settings;
+    if (s.provider && s.provider !== "auto") {
+      return `${providerName(s.provider)}${s.selected_model ? ` (${s.selected_model})` : ""}`;
+    }
+    const ready = PROVIDERS.filter((p) => !p.custom && s.configured?.[p.id]).map((p) => p.name);
+    if (ready.length) return `Auto (${ready.join(", ")})`;
+    return "Aucun service configuré";
   }
 
   function renderEngineSummary() {
     const s = state.settings;
     const ok = engineReady();
     const box = $("#current-engine");
-    box.className = "current-engine" + (ok ? " ok" : "");
-    box.innerHTML = ok
-      ? `<span class="dot"></span><div>Service actif : <b>${esc(providerName(s.provider))}</b><br><small class="muted">${esc(s.selected_model)}</small></div>`
-      : `<span class="dot"></span><div><b>Aucun service configuré</b><br><small class="muted">Choisissez un service ci-dessous pour commencer.</small></div>`;
-    $("#engine-hint").innerHTML = ok
-      ? `Service : <span class="pill">${esc(providerName(s.provider))}</span>`
-      : `<span class="pill warn">Aucun service de traduction connecté</span><button class="btn ghost sm" id="hint-setup">Configurer</button>`;
-    const b = $("#hint-setup");
-    if (b) b.onclick = () => openSettings("engine");
+    if (box) {
+      box.className = "current-engine" + (ok ? " ok" : "");
+      box.innerHTML = ok
+        ? `<span class="dot"></span><div>Service actif : <b>${esc(getActiveEngineLabel())}</b><br><small class="muted">Prêt pour la traduction automatique</small></div>`
+        : `<span class="dot"></span><div><b>Aucun service configuré</b><br><small class="muted">Choisissez un service ci-dessous pour commencer.</small></div>`;
+    }
+    const hint = $("#engine-hint");
+    if (hint) {
+      hint.innerHTML = ok
+        ? `Service d'IA : <span class="pill">${esc(getActiveEngineLabel())}</span>`
+        : `<span class="pill warn">Aucun service de traduction connecté</span><button class="btn ghost sm" id="hint-setup">Configurer</button>`;
+      const b = $("#hint-setup");
+      if (b) b.onclick = () => openSettings("engine");
+    }
+    renderApiStatus();
+    renderStudioModelPicker();
+  }
+
+  function renderApiStatus() {
+    const s = state.settings;
+    const cfg = s.configured || {};
+    const configuredList = PROVIDERS.filter((p) => !p.custom && !!cfg[p.id]);
+
+    // Topbar badges: show only configured APIs with green checkmarks
+    const top = $("#top-api-status");
+    if (top) {
+      if (configuredList.length > 0) {
+        top.innerHTML = configuredList.map((p) => {
+          return `<button type="button" class="api-pill ok" data-p="${p.id}" title="${p.name} : Clé connectée et active">${p.name} ✓</button>`;
+        }).join("");
+      } else {
+        top.innerHTML = `<button type="button" class="api-pill missing" title="Configurer une clé d'API">⚙️ Configurer API</button>`;
+      }
+      top.querySelectorAll(".api-pill").forEach((btn) => {
+        btn.onclick = () => {
+          openSettings("engine");
+          if (btn.dataset.p) {
+            setTimeout(() => {
+              const card = $(`.prov[data-p="${btn.dataset.p}"]`);
+              if (card) {
+                $$(".prov").forEach((c) => c.classList.remove("open"));
+                card.classList.add("open");
+                $("[data-f=key]", card)?.focus();
+              }
+            }, 150);
+          }
+        };
+      });
+    }
+
+    // Home empty state pills: show only configured APIs, or a setup prompt if none
+    const homePills = $("#home-api-pills");
+    if (homePills) {
+      if (configuredList.length > 0) {
+        homePills.innerHTML = configuredList.map((p) => {
+          return `<button type="button" class="api-pill ok" data-p="${p.id}" title="${p.name} : Prêt à traduire">${p.name} ✓</button>`;
+        }).join("");
+      } else {
+        homePills.innerHTML = `<button type="button" class="api-pill missing" title="Configurer un service d'IA">⚙️ Aucun service connecté — Cliquez pour configurer</button>`;
+      }
+      homePills.querySelectorAll(".api-pill").forEach((btn) => {
+        btn.onclick = () => {
+          openSettings("engine");
+          if (btn.dataset.p) {
+            setTimeout(() => {
+              const card = $(`.prov[data-p="${btn.dataset.p}"]`);
+              if (card) {
+                $$(".prov").forEach((c) => c.classList.remove("open"));
+                card.classList.add("open");
+                $("[data-f=key]", card)?.focus();
+              }
+            }, 150);
+          }
+        };
+      });
+    }
+  }
+
+  function renderStudioModelPicker() {
+    const sel = $("#studio-provider-select");
+    if (!sel) return;
+    const s = state.settings;
+    const cfg = s.configured || {};
+    const options = [];
+
+    const isAutoActive = !s.provider || s.provider === "auto";
+    options.push(`<option value="auto"${isAutoActive ? " selected" : ""}>⚡ Mode Auto (Repli automatique)</option>`);
+
+    PROVIDERS.forEach((p) => {
+      if (cfg[p.id] || p.custom) {
+        const presetModels = s.presets?.[p.id]?.models || [];
+        if (presetModels.length) {
+          options.push(`<optgroup label="${p.name}">`);
+          presetModels.forEach((m) => {
+            const val = `${p.id}:${m.id}`;
+            const selAttr = (s.provider === p.id && s.selected_model === m.id) ? " selected" : "";
+            options.push(`<option value="${esc(val)}"${selAttr}>${esc(m.label || m.id)}</option>`);
+          });
+          options.push(`</optgroup>`);
+        } else if (p.custom && s.custom_model) {
+          const val = `custom:${s.custom_model}`;
+          const selAttr = (s.provider === "custom") ? " selected" : "";
+          options.push(`<option value="${esc(val)}"${selAttr}>${p.name} : ${esc(s.custom_model)}</option>`);
+        }
+      }
+    });
+
+    options.push(`<option value="__config__">⚙️ Gérer les clés d'API...</option>`);
+    sel.innerHTML = options.join("");
+
+    sel.onchange = async () => {
+      const v = sel.value;
+      if (v === "__config__") {
+        openSettings("engine");
+        renderStudioModelPicker();
+        return;
+      }
+      if (v === "auto") {
+        state.settings.provider = "auto";
+        state.settings.selected_model = "";
+        await api("/api/settings", { json: { default_provider: "auto", selected_model: "" } });
+        toast("Mode automatique activé.", "ok");
+      } else {
+        const [prov, mod] = v.split(":");
+        state.settings.provider = prov;
+        state.settings.selected_model = mod;
+        await api("/api/settings", { json: { default_provider: prov, selected_model: mod } });
+        toast(`${providerName(prov)} (${mod}) sélectionné.`, "ok");
+      }
+      renderEngineSummary();
+    };
   }
 
   function renderProviders() {
@@ -135,6 +272,8 @@
     $("#providers").innerHTML = PROVIDERS.map((p) => {
       const has = !!s.configured?.[p.id];
       const active = s.provider === p.id && engineReady();
+      const presetModels = s.presets?.[p.id]?.models || [];
+      const hasPreset = has && presetModels.length > 0;
       return `
       <div class="prov${active ? " selected" : ""}" data-p="${p.id}">
         <button class="prov-head" data-toggle>
@@ -155,12 +294,14 @@
               <button class="btn ghost sm" data-act="connect">Connecter</button>
             </div>
           </div></div>
-          <div class="step locked" data-step="2"><b>2</b><div>
+          <div class="step${hasPreset ? "" : " locked"}" data-step="2"><b>2</b><div>
             <label class="small">Modèle</label>
-            <select data-f="model"><option>Connectez d'abord votre clé</option></select>
-            <small data-f="count"></small>
+            <select data-f="model">
+              ${hasPreset ? presetModels.map((m) => `<option value="${esc(m.id)}"${m.id === s.selected_model ? " selected" : ""}>${esc(m.label || m.id)}</option>`).join("") : "<option>Connectez d'abord votre clé</option>"}
+            </select>
+            <small data-f="count">${hasPreset ? `${presetModels.length} modèles disponibles.` : ""}</small>
           </div></div>
-          <div class="step locked" data-step="3"><b>3</b><div>
+          <div class="step${hasPreset ? "" : " locked"}" data-step="3"><b>3</b><div>
             <div class="row"><button class="btn primary sm" data-act="use">Vérifier et utiliser</button><span class="test-result" data-f="result"></span></div>
           </div></div>
         </div></div></div>

@@ -39,6 +39,7 @@
         <button class="tab" data-nav="guide">Guide</button>
         <span class="tab-indicator" id="tab-indicator"></span>
       </nav>
+      <div class="top-api-status" id="top-api-status" aria-label="Services d'IA connectés"></div>
       <div class="top-actions">
         <button class="icon-btn" id="btn-settings" title="Paramètres" aria-label="Paramètres"><svg><use href="#i-gear"/></svg></button>
         <button class="icon-btn danger" id="btn-quit" title="Quitter l'application" aria-label="Quitter"><svg><use href="#i-power"/></svg></button>
@@ -63,6 +64,7 @@
             <input type="file" id="folder-input" webkitdirectory directory multiple hidden>
           </div>
           <div class="engine-hint" id="engine-hint"></div>
+          <div class="home-api-pills" id="home-api-pills" aria-label="Services d'IA disponibles"></div>
           <ol class="steps-row">
             <li><b>1</b><span>Déposez votre chapitre</span></li>
             <li><b>2</b><span>Choisissez la langue</span></li>
@@ -78,6 +80,10 @@
               <select id="src-lang" aria-label="Langue d'origine"></select>
               <button class="icon-btn sm" id="btn-swap-lang" title="Inverser" aria-label="Inverser les langues"><svg><use href="#i-swap"/></svg></button>
               <select id="tgt-lang" aria-label="Langue de traduction"></select>
+            </div>
+            <div class="model-pick">
+              <span class="model-pick-icon" title="Modèle d'IA actif">⚡</span>
+              <select id="studio-provider-select" aria-label="Fournisseur et modèle de vision IA"></select>
             </div>
             <div class="toolbar-actions">
               <button class="btn ghost sm" id="btn-new">Nouveau</button>
