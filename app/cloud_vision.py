@@ -2,6 +2,7 @@ import base64
 import io
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -88,11 +89,19 @@ def encode_image_for_vision(img: Image.Image, max_side: int = 1600) -> Tuple[byt
     return raw_bytes, b64_str
 
 
+def is_permanent_quota_error(exc: Exception) -> bool:
+    """Detects permanent quota exhaustion (e.g. daily free limit exceeded) to immediately trigger provider failover."""
+    err_str = str(exc).lower()
+    return any(k in err_str for k in ("free-models-per-day", "insufficient_quota", "credit balance is too low", "billing"))
+
+
 def is_transient_error(exc: Exception) -> bool:
-    """Detects whether an API exception is transient (rate limit 429, 503 overload, timeout)."""
+    """Detects whether an API exception is transient (rate limit 429, 502/503/504 overload, timeouts)."""
+    if is_permanent_quota_error(exc):
+        return False
     err_str = str(exc).lower()
     transient_indicators = [
-        "429", "rate limit", "too many requests", "resourceexhausted", "quota",
+        "429", "rate limit", "too many requests", "resourceexhausted",
         "503", "502", "504", "service unavailable", "bad gateway", "gateway timeout",
         "overloaded", "server is busy", "timeout", "timed out",
         "connection reset", "connection refused", "remoteprotocolerror", "try again",
@@ -106,17 +115,20 @@ def execute_with_backoff(
     max_retries: int = 3,
     initial_delay: float = 2.0,
     backoff_factor: float = 2.0,
+    jitter: bool = True,
     **kwargs,
 ):
-    """Executes an API call with automatic exponential backoff on transient errors (429/503/timeouts)."""
+    """Executes an API call with automatic exponential backoff and jitter on transient errors (429/503/timeouts)."""
     delay = initial_delay
     for attempt in range(1, max_retries + 1):
         try:
             return func(*args, **kwargs)
         except Exception as exc:
             if attempt < max_retries and is_transient_error(exc):
-                print(f"[CloudVision] Erreur temporaire détectée ({type(exc).__name__}: {str(exc)[:90]}). Nouvelle tentative {attempt + 1}/{max_retries} après {delay:.1f}s...")
-                time.sleep(delay)
+                jitter_mult = random.uniform(0.75, 1.25) if jitter else 1.0
+                actual_delay = delay * jitter_mult
+                print(f"[CloudVision] Erreur temporaire détectée ({type(exc).__name__}: {str(exc)[:90]}). Nouvelle tentative {attempt + 1}/{max_retries} après {actual_delay:.2f}s...")
+                time.sleep(actual_delay)
                 delay *= backoff_factor
             else:
                 raise
@@ -137,20 +149,23 @@ def parse_and_validate_blocks(raw_text: str) -> List[Dict[str, Any]]:
     if m:
         raw = m.group(1).strip()
 
+    # Pre-clean raw string to remove invalid unescaped control characters before parsing JSON
+    cleaned_raw = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", raw)
+
     data = None
     try:
-        data = json.loads(raw)
+        data = json.loads(cleaned_raw)
     except Exception:
-        start = raw.find("[")
-        end = raw.rfind("]")
+        start = cleaned_raw.find("[")
+        end = cleaned_raw.rfind("]")
         if start != -1 and end > start:
             try:
-                data = json.loads(raw[start:end + 1])
+                data = json.loads(cleaned_raw[start:end + 1])
             except Exception:
                 pass
         if data is None and start != -1:
             # Attempt to salvage truncated JSON array
-            sub = raw[start:]
+            sub = cleaned_raw[start:]
             last_brace = sub.rfind("}")
             if last_brace != -1:
                 try:
@@ -230,6 +245,16 @@ def parse_and_validate_blocks(raw_text: str) -> List[Dict[str, Any]]:
             else:
                 x0, y0, x1, y1 = x, y, x + w, y + h
 
+        if x0 is None or y0 is None or x1 is None or y1 is None:
+            continue
+
+        # Inversion auto-correction if model inverted coordinates
+        if x0 > x1:
+            x0, x1 = x1, x0
+        if y0 > y1:
+            y0, y1 = y1, y0
+
+        # Strict boundary clamping within [0.0, 1000.0]
         x0 = max(0.0, min(1000.0, x0))
         y0 = max(0.0, min(1000.0, y0))
         x1 = max(0.0, min(1000.0, x1))
@@ -239,6 +264,10 @@ def parse_and_validate_blocks(raw_text: str) -> List[Dict[str, Any]]:
             continue
         if not orig and not trans:
             continue
+
+        # Sanitize control characters and normalize whitespace
+        orig = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", orig).strip()
+        trans = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", trans).strip()
 
         valid_blocks.append({
             "box": (x0, y0, x1, y1),
@@ -297,50 +326,32 @@ class CloudVisionClient:
         prompt = build_system_prompt(self.src_lang, self.tgt_lang, context_history=context_history)
         errors: List[str] = []
 
-        # 1. Explicit Custom / OpenAI compatible endpoint or specific providers (OpenAI, Groq, Mistral, Nvidia)
+        # 1. Explicit Custom / Specific provider requested by user (Groq, OpenRouter, NVIDIA, Custom, OpenAI, Mistral)
         if self.provider in ("custom", "openai", "groq", "mistral", "nvidia") or (self.base_url and self.api_key and self.model):
             preset = PROVIDER_PRESETS.get(self.provider, {})
             target_url = self.base_url or preset.get("base_url") or "https://openrouter.ai/api/v1"
             target_model = self.model or preset.get("default_model") or "gpt-4o-mini"
-            blocks = self._call_openai_compatible(
-                b64_str=b64_str,
-                base_url=target_url,
-                api_key=self.api_key or "",
-                model_name=target_model,
-                prompt=prompt,
-            )
-            return blocks, f"{self.provider}/{target_model}"
+            try:
+                blocks = self._call_openai_compatible(
+                    b64_str=b64_str,
+                    base_url=target_url,
+                    api_key=self.api_key or "",
+                    model_name=target_model,
+                    prompt=prompt,
+                )
+                return blocks, f"{self.provider}/{target_model}"
+            except Exception as e:
+                errors.append(f"{self.provider}/{target_model}: {str(e)[:140]}")
+                print(f"[CloudVision] Échec sur {self.provider}/{target_model} ({e}). Basculement automatique vers les fournisseurs de secours configurés dans .env...")
 
-        # 2. Native Anthropic (if configured)
-        if self.provider == "anthropic" or (self.provider == "auto" and os.environ.get("ANTHROPIC_API_KEY")):
-            key = self.api_key if self.provider == "anthropic" else os.environ.get("ANTHROPIC_API_KEY")
-            if key:
-                model = self.model or "claude-3-opus-20240229"
-                try:
-                    blocks = self._call_anthropic(b64_str, key, model, prompt)
-                    return blocks, f"anthropic/{model}"
-                except Exception as e:
-                    errors.append(f"Anthropic/{model}: {e}")
-                    if self.provider == "anthropic":
-                        raise
-
-        # 3. Google Gemini provider
-        if self.provider == "gemini" or (self.provider == "auto" and os.environ.get("GEMINI_API_KEY")):
-            key = self.api_key if self.provider == "gemini" else os.environ.get("GEMINI_API_KEY")
-            if key:
-                model = self.model or GEMINI_FREE_VISION_MODELS[0]
-                try:
-                    blocks = self._call_gemini(raw_bytes, key, model, prompt)
-                    return blocks, f"gemini/{model}"
-                except Exception as e:
-                    errors.append(f"Gemini/{model}: {e}")
-                    if self.provider == "gemini":
-                        raise
-
-        # 4. OpenRouter provider
+        # 2. OpenRouter provider (Models: Nemotron 3.5, Qwen 2.5 VL 72B, Llama 3.2 11B)
         or_key = (self.api_key if self.provider == "openrouter" else None) or os.environ.get("OPENROUTER_API_KEY")
-        if or_key and self.provider in ("auto", "openrouter"):
-            models_to_try = [self.model] if self.model else OPENROUTER_FREE_VISION_MODELS
+        if or_key and self.provider != "openrouter":  # if not already attempted above
+            models_to_try = [self.model] if (self.model and "openrouter" in self.provider) else [
+                "nvidia/nemotron-3.5-super-vl:free",
+                "qwen/qwen-2.5-vl-72b-instruct",
+                "meta-llama/llama-3.2-11b-vision-instruct",
+            ]
             for m in models_to_try:
                 try:
                     blocks = self._call_openai_compatible(
@@ -354,12 +365,31 @@ class CloudVisionClient:
                 except Exception as exc:
                     err_str = str(exc)
                     errors.append(f"OpenRouter/{m}: {err_str[:140]}")
-                    if "free-models-per-day" in err_str:
+                    if is_permanent_quota_error(exc) or "free-models-per-day" in err_str:
+                        print(f"[CloudVision] Quota OpenRouter atteint pour {m}. Basculement immédiat vers le fournisseur suivant...")
                         break
 
-        # 5. Fallback to NVIDIA NIM Vision if available
-        nv_key = os.environ.get("NVIDIA_API_KEY")
-        if nv_key:
+        # 3. Groq Cloud Vision provider (LPU Ultra-rapide)
+        groq_key = (self.api_key if self.provider == "groq" else None) or os.environ.get("GROQ_API_KEY")
+        if groq_key and self.provider != "groq":
+            for m in ("llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"):
+                try:
+                    blocks = self._call_openai_compatible(
+                        b64_str=b64_str,
+                        base_url="https://api.groq.com/openai/v1",
+                        api_key=groq_key,
+                        model_name=m,
+                        prompt=prompt,
+                    )
+                    return blocks, f"groq/{m}"
+                except Exception as exc:
+                    errors.append(f"Groq/{m}: {str(exc)[:140]}")
+                    if is_permanent_quota_error(exc):
+                        break
+
+        # 4. NVIDIA NIM Vision provider
+        nv_key = (self.api_key if self.provider == "nvidia" else None) or os.environ.get("NVIDIA_API_KEY")
+        if nv_key and self.provider != "nvidia":
             for m in NVIDIA_NIM_VISION_MODELS:
                 try:
                     blocks = self._call_openai_compatible(
@@ -372,10 +402,12 @@ class CloudVisionClient:
                     return blocks, f"nvidia-nim/{m}"
                 except Exception as exc:
                     errors.append(f"NvidiaNIM/{m}: {str(exc)[:140]}")
+                    if is_permanent_quota_error(exc):
+                        break
 
-        # 6. Fallback to Ollama Cloud if available (verified on https://ollama.com/v1/models)
-        ollama_key = os.environ.get("OLLAMA_API_KEY")
-        if ollama_key:
+        # 5. Ollama Cloud provider
+        ollama_key = (self.api_key if self.provider == "ollama" else None) or os.environ.get("OLLAMA_API_KEY")
+        if ollama_key and self.provider != "ollama":
             for m in ("gemma4:31b", "nemotron-3-nano:30b"):
                 try:
                     blocks = self._call_openai_compatible(
@@ -388,6 +420,26 @@ class CloudVisionClient:
                     return blocks, f"ollama-cloud/{m}"
                 except Exception as exc:
                     errors.append(f"OllamaCloud/{m}: {str(exc)[:140]}")
+
+        # 6. Native Anthropic (if configured in .env)
+        ant_key = (self.api_key if self.provider == "anthropic" else None) or os.environ.get("ANTHROPIC_API_KEY")
+        if ant_key and self.provider != "anthropic":
+            model = self.model or "claude-3-opus-20240229"
+            try:
+                blocks = self._call_anthropic(b64_str, ant_key, model, prompt)
+                return blocks, f"anthropic/{model}"
+            except Exception as e:
+                errors.append(f"Anthropic/{model}: {e}")
+
+        # 7. Google Gemini provider (ONLY if user explicitly configured GEMINI_API_KEY in .env)
+        gem_key = (self.api_key if self.provider == "gemini" else None) or os.environ.get("GEMINI_API_KEY")
+        if gem_key and self.provider != "gemini":
+            model = self.model or GEMINI_FREE_VISION_MODELS[0]
+            try:
+                blocks = self._call_gemini(raw_bytes, gem_key, model, prompt)
+                return blocks, f"gemini/{model}"
+            except Exception as e:
+                errors.append(f"Gemini/{model}: {e}")
 
         raise RuntimeError("Échec Vision (" + " | ".join(errors) + ")")
 

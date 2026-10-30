@@ -827,9 +827,26 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
     concurrency = min(3, max(1, total))
     concurrency = int(options.get("concurrency") or concurrency)
 
+    session_dir = Path(session["session_dir"])
+    pages_dir = session_dir / "pages"
+
     def _worker_task(page_idx: int):
         if session.get("cancelled"):
             return None
+
+        # Incident recovery / Resumption check:
+        # If page was already finished and translated image exists on disk, reuse it directly
+        trans_file = pages_dir / f"page_{page_idx:03d}_trans.jpg"
+        if session["pages"][page_idx].get("status") == "done" and trans_file.exists():
+            item = session["image_items"][page_idx]
+            session["translated_images"][item.relative_name] = trans_file
+            return page_idx, {
+                "status": "done",
+                "blocks_count": session["pages"][page_idx].get("blocks_count", 0),
+                "blocks": session["pages"][page_idx].get("blocks", []),
+                "model": "Resumed (cache disque)",
+            }
+
         with context_lock:
             ctx_snapshot = list(context_history[-8:])
         res = _translate_single_page(

@@ -18,7 +18,6 @@ USER_DIR.mkdir(parents=True, exist_ok=True)
 ENV_PATH = USER_DIR / ".env"
 BUNDLED_FONTS_DIR = APP_DIR / "fonts"
 HOME_ENV_PATH = Path.home() / ".env"
-OPENCODE_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 FONT_PATH = str(APP_DIR / "fonts" / "DejaVuSans-Bold.ttf")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
@@ -33,23 +32,17 @@ def _load_env_file(path: Path):
         if line.startswith("export "):
             line = line[7:]
         key, val = line.split("=", 1)
+        key = key.strip()
         clean_val = val.strip().strip('"').strip("'")
         if clean_val:
-            os.environ.setdefault(key.strip(), clean_val)
+            os.environ[key] = clean_val
+        else:
+            os.environ.pop(key, None)
 
 
 def load_env():
-    """Load variables from workspace .env and user global configs without overwriting."""
+    """Load variables strictly from workspace .env file."""
     _load_env_file(ENV_PATH)
-    _load_env_file(HOME_ENV_PATH)
-    if OPENCODE_AUTH_PATH.exists():
-        try:
-            auth_data = json.loads(OPENCODE_AUTH_PATH.read_text(encoding="utf-8"))
-            nv_key = auth_data.get("nvidia", {}).get("key", "")
-            if nv_key:
-                os.environ.setdefault("NVIDIA_API_KEY", nv_key)
-        except Exception:
-            pass
 
 
 def save_env_key(key: str, value: str):

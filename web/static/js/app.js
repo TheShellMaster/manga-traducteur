@@ -40,6 +40,8 @@
     anim: null,       // page index being animated
     detectShown: null,
     dirty: false,
+    sliderPct: 50,
+    curStep: null,
   };
 
   /* ---------------- API ---------------- */
@@ -485,11 +487,29 @@
 
   const imgUrl = (i, v) => `/api/image/${state.sid}/${v}/${i}?v=${state.ver[i] || 0}`;
 
+  function stateBadgeHTML(p, i) {
+    const s = p.status;
+    let label = "En attente";
+    if (s === "processing") {
+      if (state.cur === i && (state.curStep === "write" || state.curStep === "clean")) {
+        label = "Lettrage ✍️";
+      } else {
+        label = "Analyse ⚡";
+      }
+    } else if (s === "done") {
+      label = "Traduit ✓";
+    } else if (s === "error") {
+      label = "Erreur ✕";
+    }
+    return `<span class="state-pill ${s}" title="${esc(label)}">${label}</span>`;
+  }
+
   function renderThumbs() {
     $("#page-list").innerHTML = state.pages.map((p, i) => `
       <button class="thumb ${p.status}${i === state.cur ? " active" : ""}" data-i="${i}" style="animation-delay:${Math.min(i, 20) * 25}ms" aria-label="Page ${i + 1}">
         <img loading="lazy" src="${imgUrl(i, p.status === "done" ? "translated" : "original")}" alt="">
-        <span class="num">${i + 1}</span><span class="state"></span>
+        <span class="num">${i + 1}</span>
+        ${stateBadgeHTML(p, i)}
       </button>`).join("");
   }
 
@@ -498,6 +518,10 @@
     if (!el) return;
     const p = state.pages[i];
     el.className = `thumb ${p.status}${i === state.cur ? " active" : ""}`;
+    const pill = el.querySelector(".state-pill");
+    if (pill) {
+      pill.outerHTML = stateBadgeHTML(p, i);
+    }
     if (p.status === "done" && !el.dataset.tr) {
       el.dataset.tr = "1";
       el.querySelector("img").src = imgUrl(i, "translated");
@@ -518,16 +542,61 @@
     });
   }
 
+  function updateSliderVisual() {
+    const img = $("#img-base");
+    const top = $("#img-top");
+    const divider = $("#slider-divider");
+    if (!divider || !top || !img) return;
+    if (state.mode !== "slider" || state.pages[state.cur]?.status !== "done") {
+      divider.classList.remove("on");
+      top.classList.remove("slider-active");
+      top.style.clipPath = "";
+      return;
+    }
+    const pct = Math.max(0, Math.min(100, state.sliderPct));
+    top.classList.add("slider-active");
+    top.style.clipPath = `inset(0 calc(100% - ${pct}%) 0 0)`;
+    divider.classList.add("on");
+    const x = img.offsetLeft + (img.offsetWidth * (pct / 100));
+    divider.style.transform = `translate3d(${x}px, 0, 0)`;
+  }
+
   async function showPage(i, { keepOverlay = false } = {}) {
     if (i < 0 || i >= state.total) return;
     state.cur = i;
     const p = state.pages[i];
-    const v = state.mode === "translated" && p.status === "done" ? "translated" : "original";
     const base = $("#img-base");
+    const top = $("#img-top");
+    const divider = $("#slider-divider");
+
     base.classList.add("loading");
-    $("#img-top").classList.remove("show");
     if (!keepOverlay) { clearOverlay(); setStep(null); }
-    await loadImg(base, imgUrl(i, v));
+
+    if (state.mode === "slider" && p.status === "done") {
+      // Slider comparator mode: base = original, top = translated with clip-path
+      await Promise.all([
+        loadImg(base, imgUrl(i, "original")),
+        loadImg(top, imgUrl(i, "translated"))
+      ]);
+      top.classList.add("slider-active");
+      if (divider) divider.classList.add("on");
+      updateSliderVisual();
+    } else {
+      if (top) {
+        top.classList.remove("slider-active");
+        top.style.clipPath = "";
+        top.classList.remove("show");
+      }
+      if (divider) divider.classList.remove("on");
+      const v = state.mode === "translated" && p.status === "done" ? "translated" : "original";
+      await loadImg(base, imgUrl(i, v));
+      if (v === "translated") {
+        base.classList.remove("page-reveal");
+        void base.offsetWidth;
+        base.classList.add("page-reveal");
+      }
+    }
+
     base.classList.remove("loading");
     syncOverlay();
     $("#page-indicator").textContent = `Page ${i + 1} sur ${state.total}`;
@@ -541,6 +610,7 @@
     Object.assign(ov.style, { left: img.offsetLeft + "px", top: img.offsetTop + "px", width: img.offsetWidth + "px", height: img.offsetHeight + "px" });
     const sc = $("#scanline");
     Object.assign(sc.style, { left: img.offsetLeft + "px", width: img.offsetWidth + "px" });
+    if (state.mode === "slider") updateSliderVisual();
   }
 
   function clearOverlay() { const ov = $("#overlay"); ov.innerHTML = ""; ov.classList.remove("fade"); }
@@ -555,6 +625,7 @@
   }
 
   function setStep(s) {
+    state.curStep = s;
     const bar = $("#stage-step");
     const order = ["detect", "clean", "write"];
     bar.classList.toggle("on", !!s);
@@ -563,6 +634,9 @@
       el.classList.toggle("active", el.dataset.s === s);
       el.classList.toggle("past", c > k);
     });
+    if (state.cur !== null && state.pages[state.cur]?.status === "processing") {
+      updateThumb(state.cur);
+    }
   }
 
   function renderBubbles() {
@@ -777,6 +851,9 @@
     $("#overlay").classList.add("fade");
     await sleep(600);
     await loadImg(base, imgUrl(i, "translated"));
+    base.classList.remove("page-reveal");
+    void base.offsetWidth;
+    base.classList.add("page-reveal");
     top.classList.remove("show");
     clearOverlay();
     setStep(null);
@@ -850,20 +927,57 @@
     $("#btn-prev").onclick = () => navPage(-1);
     $("#btn-next").onclick = () => navPage(1);
     $("#follow-live").onchange = (e) => { state.follow = e.target.checked; state.detectShown = null; };
-    $$("#view-mode button").forEach((b) => b.onclick = () => { state.mode = b.dataset.mode; syncModeButtons(); if (state.anim === null) showPage(state.cur); });
+    $$("#view-mode button").forEach((b) => b.onclick = () => {
+      state.mode = b.dataset.mode;
+      syncModeButtons();
+      if (state.anim === null) showPage(state.cur);
+    });
 
-    // hold to compare
+    // hold to compare & reactive slider drag
     const canvas = $("#canvas");
-    let holdT = null, startX = 0;
+    let holdT = null, startX = 0, isDraggingSlider = false;
+
+    function setSliderFromPointer(e) {
+      const img = $("#img-base");
+      const rect = img.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const relX = e.clientX - rect.left;
+      state.sliderPct = Math.max(0, Math.min(100, (relX / rect.width) * 100));
+      updateSliderVisual();
+    }
+
     canvas.addEventListener("pointerdown", (e) => {
       startX = e.clientX;
-      if (state.anim !== null || state.pages[state.cur]?.status !== "done" || state.mode !== "translated") return;
-      holdT = setTimeout(async () => { const top = $("#img-top"); await loadImg(top, imgUrl(state.cur, "original")); top.classList.add("show"); }, 180);
+      if (state.anim !== null) return;
+      if (state.mode === "slider" && state.pages[state.cur]?.status === "done") {
+        isDraggingSlider = true;
+        setSliderFromPointer(e);
+        return;
+      }
+      if (state.pages[state.cur]?.status !== "done" || state.mode !== "translated") return;
+      holdT = setTimeout(async () => {
+        const top = $("#img-top");
+        await loadImg(top, imgUrl(state.cur, "original"));
+        top.classList.add("show");
+      }, 180);
     });
+
+    canvas.addEventListener("pointermove", (e) => {
+      if (isDraggingSlider) {
+        setSliderFromPointer(e);
+      }
+    });
+
     const release = (e) => {
       clearTimeout(holdT);
-      if (state.anim === null) $("#img-top").classList.remove("show");
-      if (e && e.type === "pointerup" && Math.abs(e.clientX - startX) > 60) navPage(e.clientX < startX ? 1 : -1);
+      if (isDraggingSlider) {
+        isDraggingSlider = false;
+        return;
+      }
+      if (state.anim === null && state.mode !== "slider") $("#img-top").classList.remove("show");
+      if (e && e.type === "pointerup" && Math.abs(e.clientX - startX) > 60 && state.mode !== "slider") {
+        navPage(e.clientX < startX ? 1 : -1);
+      }
     };
     ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => canvas.addEventListener(ev, release));
 
@@ -929,8 +1043,32 @@
   }
 
   /* ---------------- Boot ---------------- */
+  function initTheme() {
+    const theme = localStorage.getItem("mts_theme") || "light";
+    applyTheme(theme);
+    const btn = $("#btn-theme");
+    if (btn) {
+      btn.onclick = () => {
+        const cur = document.documentElement.getAttribute("data-theme") || "light";
+        const next = cur === "light" ? "dark" : "light";
+        applyTheme(next);
+        localStorage.setItem("mts_theme", next);
+        toast(next === "light" ? "Thème clair activé" : "Thème sombre activé", "ok");
+      };
+    }
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    const icon = $("#theme-icon");
+    if (icon) icon.textContent = theme === "light" ? "🌙" : "☀️";
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", theme === "light" ? "#f8fafc" : "#0c0d12");
+  }
+
   function heartbeat() { fetch("/api/system/heartbeat", { method: "POST" }).catch(() => {}); }
 
+  initTheme();
   bind();
   loadSettings();
   const start = (location.hash || "#translate").slice(1);

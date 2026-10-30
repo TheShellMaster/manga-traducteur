@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="fr" data-theme="dark">
+<html lang="fr" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0c0d12">
+  <meta name="theme-color" content="#f8fafc">
   <title>Manga Translator Studio</title>
   <link rel="manifest" href="/static/manifest.json">
   <link rel="icon" href="/static/icons/icon-192.png">
-  <link rel="stylesheet" href="/static/css/style.css?v=3">
+  <link rel="stylesheet" href="/static/css/style.css?v=4">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -41,6 +41,7 @@
       </nav>
       <div class="top-api-status" id="top-api-status" aria-label="Services d'IA connectés"></div>
       <div class="top-actions">
+        <button class="icon-btn" id="btn-theme" title="Basculer thème clair/sombre" aria-label="Thème"><span id="theme-icon">🌙</span></button>
         <button class="icon-btn" id="btn-settings" title="Paramètres" aria-label="Paramètres"><svg><use href="#i-gear"/></svg></button>
         <button class="icon-btn danger" id="btn-quit" title="Quitter l'application" aria-label="Quitter"><svg><use href="#i-power"/></svg></button>
       </div>
@@ -105,6 +106,7 @@
               <div class="stage-head">
                 <div class="seg" id="view-mode">
                   <button class="active" data-mode="translated">Traduit</button>
+                  <button data-mode="slider">Slider</button>
                   <button data-mode="original">Original</button>
                 </div>
                 <div class="live-badge hidden" id="live-badge"><span class="dot"></span><span id="live-text">En direct</span></div>
@@ -120,6 +122,9 @@
                   <img id="img-top" alt="" draggable="false" aria-hidden="true">
                   <div class="overlay" id="overlay"></div>
                   <div class="scanline" id="scanline"></div>
+                  <div class="slider-divider" id="slider-divider" aria-hidden="true">
+                    <span class="slider-knob"></span>
+                  </div>
                 </div>
                 <button class="nav-arrow right" id="btn-next" aria-label="Page suivante"><svg><use href="#i-right"/></svg></button>
                 <div class="stage-step" id="stage-step">
