@@ -46,7 +46,7 @@ def run_translation_pipeline(
             raise ValueError(f"Aucune image trouvée dans {src}")
 
         # 2. Initialize Cloud Vision Client
-        client = CloudVisionClient(preferred_provider=provider)
+        client = CloudVisionClient(provider=provider)
         rendered_images: Dict[str, Image.Image] = {}
 
         for idx, item in enumerate(image_items, start=1):

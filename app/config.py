@@ -80,8 +80,7 @@ PROVIDER_PRESETS = {
         "base_url": "https://openrouter.ai/api/v1",
         "models": [
             {"id": "nvidia/nemotron-3.5-super-vl:free", "label": "Nvidia Nemotron 3.5 Super VL (Gratuit)"},
-            {"id": "meta-llama/llama-3.2-11b-vision-instruct", "label": "Llama 3.2 11B Vision Instruct"},
-            {"id": "qwen/qwen-2.5-vl-72b-instruct", "label": "Qwen 2.5 VL 72B (Excellente détection manga)"},
+            {"id": "qwen/qwen2.5-vl-72b-instruct", "label": "Qwen 2.5 VL 72B (Excellente détection manga)"},
             {"id": "openai/gpt-4o", "label": "OpenAI GPT-4o Vision"},
             {"id": "anthropic/claude-3.5-sonnet", "label": "Anthropic Claude 3.5 Sonnet"},
         ],
@@ -95,15 +94,6 @@ PROVIDER_PRESETS = {
             {"id": "gpt-4o-mini", "label": "GPT-4o Mini (Rapide et économique)"},
         ],
         "default_model": "gpt-4o-mini",
-    },
-    "groq": {
-        "name": "Groq Cloud (Inférence Ultra-Rapide)",
-        "base_url": "https://api.groq.com/openai/v1",
-        "models": [
-            {"id": "llama-3.2-11b-vision-preview", "label": "Llama 3.2 11B Vision (Groq LPU)"},
-            {"id": "llama-3.2-90b-vision-preview", "label": "Llama 3.2 90B Vision (Groq LPU)"},
-        ],
-        "default_model": "llama-3.2-11b-vision-preview",
     },
     "mistral": {
         "name": "Mistral AI (Modèles Pixtral)",
@@ -134,7 +124,7 @@ PROVIDER_PRESETS = {
 
 OPENROUTER_FREE_VISION_MODELS = [
     "nvidia/nemotron-3.5-super-vl:free",
-    "meta-llama/llama-3.2-11b-vision-instruct",
+    "qwen/qwen2.5-vl-72b-instruct",
 ]
 
 NVIDIA_NIM_VISION_MODELS = [

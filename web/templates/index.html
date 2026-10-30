@@ -106,7 +106,8 @@
               <div class="stage-head">
                 <div class="seg" id="view-mode">
                   <button class="active" data-mode="translated">Traduit</button>
-                  <button data-mode="slider">Slider</button>
+                  <button data-mode="split">Côte à côte</button>
+                  <button data-mode="slider">Curseur A/B</button>
                   <button data-mode="original">Original</button>
                 </div>
                 <div class="live-badge hidden" id="live-badge"><span class="dot"></span><span id="live-text">En direct</span></div>
@@ -118,12 +119,24 @@
               <div class="stage" id="stage">
                 <button class="nav-arrow left" id="btn-prev" aria-label="Page précédente"><svg><use href="#i-left"/></svg></button>
                 <div class="canvas" id="canvas">
+                  <span class="canvas-badge hidden" id="canvas-orig-badge">Original</span>
                   <img id="img-base" alt="Page" draggable="false">
                   <img id="img-top" alt="" draggable="false" aria-hidden="true">
                   <div class="overlay" id="overlay"></div>
                   <div class="scanline" id="scanline"></div>
-                  <div class="slider-divider" id="slider-divider" aria-hidden="true">
-                    <span class="slider-knob"></span>
+                </div>
+                <div class="canvas canvas-split hidden" id="canvas-split">
+                  <span class="canvas-badge" id="canvas-split-badge">Traduit</span>
+                  <img id="img-split" alt="Traduit" draggable="false">
+                </div>
+                <div class="slider-container hidden" id="slider-container" style="--slider-pos: 50%;">
+                  <span class="canvas-badge slider-badge-orig">Original</span>
+                  <span class="canvas-badge slider-badge-trans">Traduit</span>
+                  <img id="slider-orig" alt="Original" draggable="false">
+                  <img id="slider-trans" alt="Traduit" draggable="false">
+                  <div class="slider-handle" id="slider-handle" aria-label="Curseur de comparaison">
+                    <span class="slider-line"></span>
+                    <span class="slider-button">‹ ›</span>
                   </div>
                 </div>
                 <button class="nav-arrow right" id="btn-next" aria-label="Page suivante"><svg><use href="#i-right"/></svg></button>

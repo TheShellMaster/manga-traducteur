@@ -1,452 +1,452 @@
 [
   {
-    "session_id": "32274548",
+    "session_id": "548e4e63",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:45",
+    "model": "mock",
+    "download_url": "/api/download/548e4e63"
+  },
+  {
+    "session_id": "47ba3045",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:45",
+    "model": "mock",
+    "download_url": "/api/download/47ba3045"
+  },
+  {
+    "session_id": "e9f4801b",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:45",
+    "model": "mock-model",
+    "download_url": "/api/download/e9f4801b"
+  },
+  {
+    "session_id": "3867a642",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:45",
+    "model": "openrouter/free-vl",
+    "download_url": "/api/download/3867a642"
+  },
+  {
+    "session_id": "84752461",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:45",
+    "model": "mock/llama-3.2-vision",
+    "download_url": "/api/download/84752461"
+  },
+  {
+    "session_id": "1b52ad5b",
+    "filename": "rerender.cbz",
+    "format": "cbz",
+    "total_pages": 1,
+    "date": "2026-10-30 06:44",
+    "model": "mock",
+    "download_url": "/api/download/1b52ad5b"
+  },
+  {
+    "session_id": "9d750054",
+    "filename": "mon_manga",
+    "format": "folder",
+    "total_pages": 2,
+    "date": "2026-10-30 06:44",
+    "model": "mock",
+    "download_url": "/api/download/9d750054"
+  },
+  {
+    "session_id": "33b243f6",
+    "filename": "context.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:44",
+    "model": "mock-model",
+    "download_url": "/api/download/33b243f6"
+  },
+  {
+    "session_id": "e7175c07",
+    "filename": "concurrent.cbz",
+    "format": "cbz",
+    "total_pages": 4,
+    "date": "2026-10-30 06:44",
+    "model": "mock-model",
+    "download_url": "/api/download/e7175c07"
+  },
+  {
+    "session_id": "fbdffec7",
+    "filename": "partial_fail.cbz",
+    "format": "cbz",
+    "total_pages": 4,
+    "date": "2026-10-30 06:44",
+    "model": "mock-model",
+    "download_url": "/api/download/fbdffec7"
+  },
+  {
+    "session_id": "8bc73b7d",
     "filename": "mini.cbz",
     "format": "cbz",
     "total_pages": 2,
-    "date": "2026-10-30 05:39",
+    "date": "2026-10-30 06:41",
     "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/32274548"
+    "download_url": "/api/download/8bc73b7d"
   },
   {
-    "session_id": "44672515",
-    "filename": "memory_test.cbz",
-    "format": "cbz",
-    "total_pages": 10,
-    "date": "2026-10-30 05:39",
-    "model": "mock-vision (cache)",
-    "download_url": "/api/download/44672515"
-  },
-  {
-    "session_id": "07bda4b3",
-    "filename": "recovery_test.cbz",
-    "format": "cbz",
-    "total_pages": 5,
-    "date": "2026-10-30 05:39",
-    "model": "mock-model",
-    "download_url": "/api/download/07bda4b3"
-  },
-  {
-    "session_id": "e7a99616",
-    "filename": "chapter_test.cbz",
-    "format": "cbz",
-    "total_pages": 6,
-    "date": "2026-10-30 05:39",
-    "model": "openrouter/mock-vision (cache)",
-    "download_url": "/api/download/e7a99616"
-  },
-  {
-    "session_id": "484606a9",
-    "filename": "memory_test.cbz",
-    "format": "cbz",
-    "total_pages": 10,
-    "date": "2026-10-30 05:38",
-    "model": "mock-vision (cache)",
-    "download_url": "/api/download/484606a9"
-  },
-  {
-    "session_id": "8850e3f2",
-    "filename": "recovery_test.cbz",
-    "format": "cbz",
-    "total_pages": 5,
-    "date": "2026-10-30 05:38",
-    "model": "mock-model",
-    "download_url": "/api/download/8850e3f2"
-  },
-  {
-    "session_id": "1776d39f",
-    "filename": "chapter_test.cbz",
-    "format": "cbz",
-    "total_pages": 6,
-    "date": "2026-10-30 05:38",
-    "model": "openrouter/mock-vision (cache)",
-    "download_url": "/api/download/1776d39f"
-  },
-  {
-    "session_id": "443d4b0f",
+    "session_id": "4b846b75",
     "filename": "mini.cbz",
     "format": "cbz",
     "total_pages": 2,
-    "date": "2026-10-30 05:36",
+    "date": "2026-10-30 06:41",
     "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/443d4b0f"
+    "download_url": "/api/download/4b846b75"
   },
   {
-    "session_id": "017c4579",
+    "session_id": "6ee7e9f2",
     "filename": "memory_test.cbz",
     "format": "cbz",
     "total_pages": 10,
-    "date": "2026-10-30 05:35",
+    "date": "2026-10-30 06:41",
     "model": "mock-vision (cache)",
-    "download_url": "/api/download/017c4579"
+    "download_url": "/api/download/6ee7e9f2"
   },
   {
-    "session_id": "4ba5281c",
+    "session_id": "49b031ed",
     "filename": "recovery_test.cbz",
     "format": "cbz",
     "total_pages": 5,
-    "date": "2026-10-30 05:35",
+    "date": "2026-10-30 06:41",
     "model": "mock-model",
-    "download_url": "/api/download/4ba5281c"
+    "download_url": "/api/download/49b031ed"
   },
   {
-    "session_id": "b2e861b8",
-    "filename": "chapter_test.cbz",
-    "format": "cbz",
-    "total_pages": 6,
-    "date": "2026-10-30 05:35",
-    "model": "openrouter/mock-vision (cache)",
-    "download_url": "/api/download/b2e861b8"
-  },
-  {
-    "session_id": "e42afea5",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 05:35",
-    "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/e42afea5"
-  },
-  {
-    "session_id": "b395934b",
+    "session_id": "aa8ab499",
     "filename": "memory_test.cbz",
     "format": "cbz",
     "total_pages": 10,
-    "date": "2026-10-30 05:34",
+    "date": "2026-10-30 06:41",
     "model": "mock-vision (cache)",
-    "download_url": "/api/download/b395934b"
+    "download_url": "/api/download/aa8ab499"
   },
   {
-    "session_id": "3872c99b",
+    "session_id": "a5e2457f",
     "filename": "recovery_test.cbz",
     "format": "cbz",
     "total_pages": 5,
-    "date": "2026-10-30 05:34",
+    "date": "2026-10-30 06:40",
     "model": "mock-model",
-    "download_url": "/api/download/3872c99b"
+    "download_url": "/api/download/a5e2457f"
   },
   {
-    "session_id": "393d6253",
+    "session_id": "af22cc0f",
     "filename": "chapter_test.cbz",
     "format": "cbz",
     "total_pages": 6,
-    "date": "2026-10-30 05:34",
+    "date": "2026-10-30 06:40",
     "model": "mock-model (cache)",
-    "download_url": "/api/download/393d6253"
+    "download_url": "/api/download/af22cc0f"
   },
   {
-    "session_id": "39cf0ffb",
-    "filename": "mini.cbz",
+    "session_id": "091b5fc9",
+    "filename": "Official_Chapter 41.5.cbz",
     "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 05:34",
-    "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/39cf0ffb"
+    "total_pages": 3,
+    "date": "2026-10-30 06:40",
+    "model": "mock",
+    "download_url": "/api/download/091b5fc9"
   },
   {
-    "session_id": "fca16cb6",
-    "filename": "mini.cbz",
+    "session_id": "03a7c195",
+    "filename": "chapter_test.cbz",
     "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 05:34",
-    "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/fca16cb6"
+    "total_pages": 6,
+    "date": "2026-10-30 06:40",
+    "model": "openrouter/mock-vision (cache)",
+    "download_url": "/api/download/03a7c195"
   },
   {
-    "session_id": "f8c3194a",
+    "session_id": "b2ce3b9f",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:40",
+    "model": "mock",
+    "download_url": "/api/download/b2ce3b9f"
+  },
+  {
+    "session_id": "a5d4efde",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:40",
+    "model": "mock",
+    "download_url": "/api/download/a5d4efde"
+  },
+  {
+    "session_id": "aba18a5a",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:40",
+    "model": "mock-model",
+    "download_url": "/api/download/aba18a5a"
+  },
+  {
+    "session_id": "a1a3a431",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:40",
+    "model": "mock",
+    "download_url": "/api/download/a1a3a431"
+  },
+  {
+    "session_id": "f748c0be",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:40",
+    "model": "mock-model",
+    "download_url": "/api/download/f748c0be"
+  },
+  {
+    "session_id": "0629353a",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:40",
+    "model": "openrouter/free-vl",
+    "download_url": "/api/download/0629353a"
+  },
+  {
+    "session_id": "ceae1f33",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:40",
+    "model": "openrouter/free-vl",
+    "download_url": "/api/download/ceae1f33"
+  },
+  {
+    "session_id": "fc487f19",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:40",
+    "model": "mock/llama-3.2-vision",
+    "download_url": "/api/download/fc487f19"
+  },
+  {
+    "session_id": "0ee9faf9",
+    "filename": "rerender.cbz",
+    "format": "cbz",
+    "total_pages": 1,
+    "date": "2026-10-30 06:39",
+    "model": "mock",
+    "download_url": "/api/download/0ee9faf9"
+  },
+  {
+    "session_id": "64735abe",
+    "filename": "Official_Chapter 41.5.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:39",
+    "model": "mock/llama-3.2-vision",
+    "download_url": "/api/download/64735abe"
+  },
+  {
+    "session_id": "97920947",
+    "filename": "mon_manga",
+    "format": "folder",
+    "total_pages": 2,
+    "date": "2026-10-30 06:39",
+    "model": "mock",
+    "download_url": "/api/download/97920947"
+  },
+  {
+    "session_id": "994ba1b9",
+    "filename": "rerender.cbz",
+    "format": "cbz",
+    "total_pages": 1,
+    "date": "2026-10-30 06:39",
+    "model": "mock",
+    "download_url": "/api/download/994ba1b9"
+  },
+  {
+    "session_id": "df8c9446",
+    "filename": "mon_manga",
+    "format": "folder",
+    "total_pages": 2,
+    "date": "2026-10-30 06:39",
+    "model": "mock",
+    "download_url": "/api/download/df8c9446"
+  },
+  {
+    "session_id": "48762eec",
+    "filename": "context.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:39",
+    "model": "mock-model",
+    "download_url": "/api/download/48762eec"
+  },
+  {
+    "session_id": "89ee2203",
+    "filename": "context.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 06:39",
+    "model": "mock-model",
+    "download_url": "/api/download/89ee2203"
+  },
+  {
+    "session_id": "0ce7f719",
+    "filename": "concurrent.cbz",
+    "format": "cbz",
+    "total_pages": 4,
+    "date": "2026-10-30 06:39",
+    "model": "mock-model",
+    "download_url": "/api/download/0ce7f719"
+  },
+  {
+    "session_id": "022b389d",
+    "filename": "concurrent.cbz",
+    "format": "cbz",
+    "total_pages": 4,
+    "date": "2026-10-30 06:39",
+    "model": "mock-model",
+    "download_url": "/api/download/022b389d"
+  },
+  {
+    "session_id": "a09e73b6",
+    "filename": "partial_fail.cbz",
+    "format": "cbz",
+    "total_pages": 4,
+    "date": "2026-10-30 06:39",
+    "model": "mock-model",
+    "download_url": "/api/download/a09e73b6"
+  },
+  {
+    "session_id": "48a0b871",
+    "filename": "partial_fail.cbz",
+    "format": "cbz",
+    "total_pages": 4,
+    "date": "2026-10-30 06:39",
+    "model": "mock-model",
+    "download_url": "/api/download/48a0b871"
+  },
+  {
+    "session_id": "2374bcb7",
     "filename": "memory_test.cbz",
     "format": "cbz",
     "total_pages": 10,
-    "date": "2026-10-30 05:34",
+    "date": "2026-10-30 06:38",
     "model": "mock-vision (cache)",
-    "download_url": "/api/download/f8c3194a"
+    "download_url": "/api/download/2374bcb7"
   },
   {
-    "session_id": "a1fa70ce",
+    "session_id": "81fe65b2",
     "filename": "recovery_test.cbz",
     "format": "cbz",
     "total_pages": 5,
-    "date": "2026-10-30 05:34",
+    "date": "2026-10-30 06:38",
     "model": "mock-model",
-    "download_url": "/api/download/a1fa70ce"
+    "download_url": "/api/download/81fe65b2"
   },
   {
-    "session_id": "dc7075e8",
+    "session_id": "abfc8cd2",
+    "filename": "chapter_test.cbz",
+    "format": "cbz",
+    "total_pages": 6,
+    "date": "2026-10-30 06:38",
+    "model": "mock-model (cache)",
+    "download_url": "/api/download/abfc8cd2"
+  },
+  {
+    "session_id": "84e4a68e",
+    "filename": "mini.cbz",
+    "format": "cbz",
+    "total_pages": 2,
+    "date": "2026-10-30 06:38",
+    "model": "mock/vision-v1 (cache)",
+    "download_url": "/api/download/84e4a68e"
+  },
+  {
+    "session_id": "0dc538b3",
     "filename": "memory_test.cbz",
     "format": "cbz",
     "total_pages": 10,
-    "date": "2026-10-30 05:34",
+    "date": "2026-10-30 06:37",
     "model": "mock-vision (cache)",
-    "download_url": "/api/download/dc7075e8"
+    "download_url": "/api/download/0dc538b3"
   },
   {
-    "session_id": "7f9c5ada",
-    "filename": "memory_test.cbz",
-    "format": "cbz",
-    "total_pages": 10,
-    "date": "2026-10-30 05:34",
-    "model": "mock-vision",
-    "download_url": "/api/download/7f9c5ada"
-  },
-  {
-    "session_id": "3fcf7a11",
+    "session_id": "64611629",
     "filename": "recovery_test.cbz",
     "format": "cbz",
     "total_pages": 5,
-    "date": "2026-10-30 05:34",
+    "date": "2026-10-30 06:37",
     "model": "mock-model",
-    "download_url": "/api/download/3fcf7a11"
+    "download_url": "/api/download/64611629"
   },
   {
-    "session_id": "a2cc477b",
+    "session_id": "44b763db",
     "filename": "chapter_test.cbz",
     "format": "cbz",
     "total_pages": 6,
-    "date": "2026-10-30 05:34",
+    "date": "2026-10-30 06:37",
     "model": "openrouter/mock-vision (cache)",
-    "download_url": "/api/download/a2cc477b"
+    "download_url": "/api/download/44b763db"
   },
   {
-    "session_id": "223e401c",
+    "session_id": "9e6be892",
+    "filename": "mini.cbz",
+    "format": "cbz",
+    "total_pages": 2,
+    "date": "2026-10-30 06:35",
+    "model": "mock/vision-v1 (cache)",
+    "download_url": "/api/download/9e6be892"
+  },
+  {
+    "session_id": "3171d4a6",
+    "filename": "mini.cbz",
+    "format": "cbz",
+    "total_pages": 2,
+    "date": "2026-10-30 06:32",
+    "model": "mock/vision-v1 (cache)",
+    "download_url": "/api/download/3171d4a6"
+  },
+  {
+    "session_id": "c58b47cf",
+    "filename": "memory_test.cbz",
+    "format": "cbz",
+    "total_pages": 10,
+    "date": "2026-10-30 06:32",
+    "model": "mock-vision (cache)",
+    "download_url": "/api/download/c58b47cf"
+  },
+  {
+    "session_id": "d16031e9",
     "filename": "recovery_test.cbz",
     "format": "cbz",
     "total_pages": 5,
-    "date": "2026-10-30 05:34",
+    "date": "2026-10-30 06:32",
     "model": "mock-model",
-    "download_url": "/api/download/223e401c"
+    "download_url": "/api/download/d16031e9"
   },
   {
-    "session_id": "f6df4120",
+    "session_id": "76f8405d",
     "filename": "chapter_test.cbz",
     "format": "cbz",
     "total_pages": 6,
-    "date": "2026-10-30 05:33",
+    "date": "2026-10-30 06:32",
     "model": "openrouter/mock-vision (cache)",
-    "download_url": "/api/download/f6df4120"
-  },
-  {
-    "session_id": "eeb8cc73",
-    "filename": "chapter_test.cbz",
-    "format": "cbz",
-    "total_pages": 6,
-    "date": "2026-10-30 05:33",
-    "model": "openrouter/mock-vision",
-    "download_url": "/api/download/eeb8cc73"
-  },
-  {
-    "session_id": "be916f69",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 05:33",
-    "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/be916f69"
-  },
-  {
-    "session_id": "41159be0",
-    "filename": "memory_test.cbz",
-    "format": "cbz",
-    "total_pages": 10,
-    "date": "2026-10-30 05:32",
-    "model": "openrouter/mock-vision (cache)",
-    "download_url": "/api/download/41159be0"
-  },
-  {
-    "session_id": "2d4d62db",
-    "filename": "recovery_test.cbz",
-    "format": "cbz",
-    "total_pages": 5,
-    "date": "2026-10-30 05:32",
-    "model": "openrouter/mock-vision (cache)",
-    "download_url": "/api/download/2d4d62db"
-  },
-  {
-    "session_id": "156bc9bf",
-    "filename": "chapter_test.cbz",
-    "format": "cbz",
-    "total_pages": 6,
-    "date": "2026-10-30 05:32",
-    "model": "openrouter/mock-vision (cache)",
-    "download_url": "/api/download/156bc9bf"
-  },
-  {
-    "session_id": "5829db4b",
-    "filename": "memory_test.cbz",
-    "format": "cbz",
-    "total_pages": 10,
-    "date": "2026-10-30 05:32",
-    "model": "openrouter/mock-vision (cache)",
-    "download_url": "/api/download/5829db4b"
-  },
-  {
-    "session_id": "955bcdc9",
-    "filename": "recovery_test.cbz",
-    "format": "cbz",
-    "total_pages": 5,
-    "date": "2026-10-30 05:32",
-    "model": "openrouter/mock-vision (cache)",
-    "download_url": "/api/download/955bcdc9"
-  },
-  {
-    "session_id": "b0177cc6",
-    "filename": "chapter_test.cbz",
-    "format": "cbz",
-    "total_pages": 6,
-    "date": "2026-10-30 05:32",
-    "model": "openrouter/mock-vision",
-    "download_url": "/api/download/b0177cc6"
-  },
-  {
-    "session_id": "60ca8137",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 05:29",
-    "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/60ca8137"
-  },
-  {
-    "session_id": "5e8b55f0",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 05:28",
-    "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/5e8b55f0"
-  },
-  {
-    "session_id": "15f3c464",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 05:27",
-    "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/15f3c464"
-  },
-  {
-    "session_id": "b40de212",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 05:25",
-    "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/b40de212"
-  },
-  {
-    "session_id": "2db7bb4a",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 05:19",
-    "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/2db7bb4a"
-  },
-  {
-    "session_id": "22a19317",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 05:18",
-    "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/22a19317"
-  },
-  {
-    "session_id": "f0bb2f9a",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 05:15",
-    "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/f0bb2f9a"
-  },
-  {
-    "session_id": "a98d8d42",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 05:05",
-    "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/a98d8d42"
-  },
-  {
-    "session_id": "04a39319",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 02:57",
-    "model": "mock/vision-v1 (cache)",
-    "download_url": "/api/download/04a39319"
-  },
-  {
-    "session_id": "776f5437",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 02:54",
-    "model": "mock/vision-v1",
-    "download_url": "/api/download/776f5437"
-  },
-  {
-    "session_id": "3a0f7272",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 02:46",
-    "model": "mock/vision-v1",
-    "download_url": "/api/download/3a0f7272"
-  },
-  {
-    "session_id": "37a6c1cd",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 02:44",
-    "model": "mock/vision-v1",
-    "download_url": "/api/download/37a6c1cd"
-  },
-  {
-    "session_id": "bc901d35",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 02:36",
-    "model": "mock/vision-v1",
-    "download_url": "/api/download/bc901d35"
-  },
-  {
-    "session_id": "deaf3b87",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 02:34",
-    "model": "mock/vision-v1",
-    "download_url": "/api/download/deaf3b87"
-  },
-  {
-    "session_id": "2e69c485",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 02:22",
-    "model": "mock/vision-v1",
-    "download_url": "/api/download/2e69c485"
-  },
-  {
-    "session_id": "08948c69",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 02:21",
-    "model": "mock/vision-v1",
-    "download_url": "/api/download/08948c69"
-  },
-  {
-    "session_id": "c1beff44",
-    "filename": "mini.cbz",
-    "format": "cbz",
-    "total_pages": 2,
-    "date": "2026-10-30 02:21",
-    "model": "mock/vision-v1",
-    "download_url": "/api/download/c1beff44"
+    "download_url": "/api/download/76f8405d"
   }
 ]

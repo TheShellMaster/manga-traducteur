@@ -68,10 +68,19 @@ Ce fichier consigne les erreurs rencontrées, leur cause racine et la règle pr�
 
 ---
 
-## 8. Refactorisation par Opus : Architecture Monoprocessus, Heartbeat Auto-Exit & UI Épurée
-- **Constat & Problème résolu** : Les ajouts successifs (système de tray icon séparé, contrôleurs Tkinter additionnels, fichiers d'animations CSS/JS injectant des spans dans le DOM) alourdissaient la base de code (+5 000 lignes) et multipliaient les risques de processus orphelins.
-- **Approche d'Opus retenue & intégrée** :
-  1. **Lanceur Monoprocessus (`app/launcher.py`)** : Si `pywebview` est disponible, ouverture en fenêtre native unique. Sinon, ouverture dans le navigateur avec un mécanisme de **Heartbeat (`POST /api/system/heartbeat`)** et watchdog (`_auto_exit_watchdog`) : dès que tous les onglets sont fermés pendant ~40 s, le serveur s'éteint tout seul.
-  2. **Bouton Quitter Direct** : Bouton d'alimentation rouge `#btn-quit` placé directement dans la barre supérieure de l'UI pour un arrêt immédiat.
-  3. **Purge du code mort** : Suppression des fichiers parasites `animations.css` et `animations.js`. Réduction de `style.css` à 367 lignes et `app.js` à 801 lignes.
-  4. **Embarquement des polices (`app/fonts/`)** : Dépendance zéro aux polices système `/usr/share/fonts` pour garantir la portabilité Windows, macOS et mobile.
+## 9. Règle Fondamentale : Respect Strict du Périmètre des Clés API & Zéro Intrusion
+- **Erreur commise** : L'assistant a cherché et chargé une clé API (NVIDIA) trouvée dans `~/.local/share/opencode/auth.json` sans demande explicite de l'utilisateur.
+- **Principe & Règle Absolue** :
+  1. **Strict périmètre `.env`** : L'application et les agents ont interdiction formelle d'aller fouiller des fichiers personnels hors du projet pour injecter des clés d'API. Seules les variables présentes dans le `.env` du projet sont valides.
+  2. **Purge immédiate** : `OPENCODE_AUTH_PATH` a été supprimé de `app/config.py`. `load_env()` charge désormais strictement le fichier `.env` du workspace.
+  3. **Affichage clair** : L'interface affiche exclusivement les services que l'utilisateur a explicitement configurés (`OpenRouter ✓`, `Groq ✓`).
+
+---
+
+## 10. Support Thème Clair Natif & Éradication des Couleurs Sombres Codées en Dur
+- **Constat** : L'interface imposait un thème sombre forcé avec des couleurs `#0c0d12` et `#161922` codées en dur, rendant l'application inconfortable pour les utilisateurs préférant un environnement clair.
+- **Correctif** :
+  1. Bascule complète sur des variables CSS dynamiques avec `[data-theme="light"]` par défaut (fond blanc cassé `--bg: #f8fafc`, cartes blanches pures `--panel: #ffffff`, texte `--text: #0f172a`).
+  2. Ajout du bouton de bascule clair/sombre (`#btn-theme`) avec mémorisation dans `localStorage`.
+  3. Nettoyage de toutes les valeurs de contraste pour garantir une lisibilité parfaite sans texte grisâtre sur fond clair.
+

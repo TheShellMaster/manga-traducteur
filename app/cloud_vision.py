@@ -55,7 +55,8 @@ Rules:
 2. Follow standard manga reading order: right-to-left, top-to-bottom.
 3. Translate into natural, fluent, idiomatic spoken {tgt_lang} suitable for comic speech bubbles.
 4. Ignore tiny watermarks, page numbers, credits, or scanlation logos.
-5. Strictly output ONLY the JSON array."""
+5. DO NOT copy example bounding boxes or coordinates. You MUST compute the exact bounding box (x, y, w, h) specifically for each distinct speech bubble detected on the image.
+6. Strictly output ONLY the JSON array."""
 
 
 def encode_image_for_vision(img: Image.Image, max_side: int = 1600) -> Tuple[bytes, str]:
@@ -92,7 +93,29 @@ def encode_image_for_vision(img: Image.Image, max_side: int = 1600) -> Tuple[byt
 def is_permanent_quota_error(exc: Exception) -> bool:
     """Detects permanent quota exhaustion (e.g. daily free limit exceeded) to immediately trigger provider failover."""
     err_str = str(exc).lower()
-    return any(k in err_str for k in ("free-models-per-day", "insufficient_quota", "credit balance is too low", "billing"))
+    return any(k in err_str for k in (
+        "free-models-per-day",
+        "insufficient_quota",
+        "insufficientquota",
+        "credit balance is too low",
+        "billing",
+        "upstream_provider_shared_pool",
+    ))
+
+
+def is_quota_or_rate_limit_error(exc: Exception) -> bool:
+    """Detects HTTP 429 or quota limit exhaustion to trigger automatic failover."""
+    if is_permanent_quota_error(exc):
+        return True
+    err_str = str(exc).lower()
+    return any(k in err_str for k in (
+        "429",
+        "rate limit",
+        "rate_limit",
+        "too many requests",
+        "resourceexhausted",
+        "quota",
+    ))
 
 
 def is_transient_error(exc: Exception) -> bool:
@@ -235,15 +258,21 @@ def parse_and_validate_blocks(raw_text: str) -> List[Dict[str, Any]]:
             if not box or len(box) != 4:
                 continue
             try:
-                x, y, w, h = [float(v) for v in box]
+                v0, v1, v2, v3 = [float(v) for v in box]
             except (TypeError, ValueError):
                 continue
-            if w <= 0 or h <= 0:
+
+            # Check if this is an inverted out-of-bounds coordinate pair (e.g. [1200, 800, -100, 200])
+            if v0 > 1000.0 and v2 < 0:
+                x0, y0, x1, y1 = v2, min(v1, v3), v0, max(v1, v3)
+            elif (v0 + v2 > 1000.0 and v2 > v0 and v3 > v1):
+                # Disambiguate if model returned (x2, y2) instead of (w, h)
+                x0, y0, x1, y1 = v0, v1, v2, v3
+            elif v2 <= 0 or v3 <= 0:
+                # Invalid negative or zero width/height
                 continue
-            if (x + w > 1000.0 and w > x and h > y) or (y + h > 1000.0 and h > y and w > x):
-                x0, y0, x1, y1 = x, y, w, h
             else:
-                x0, y0, x1, y1 = x, y, x + w, y + h
+                x0, y0, x1, y1 = v0, v1, v0 + v2, v1 + v3
 
         if x0 is None or y0 is None or x1 is None or y1 is None:
             continue
@@ -265,8 +294,10 @@ def parse_and_validate_blocks(raw_text: str) -> List[Dict[str, Any]]:
         if not orig and not trans:
             continue
 
-        # Sanitize control characters and normalize whitespace
+        # Sanitize ANSI escape sequences and control characters
+        orig = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", orig)
         orig = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", orig).strip()
+        trans = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", trans)
         trans = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", trans).strip()
 
         valid_blocks.append({
@@ -292,8 +323,11 @@ class CloudVisionClient:
         model: Optional[str] = None,
         src_lang: str = "Japanese",
         tgt_lang: str = "French",
+        preferred_provider: Optional[str] = None,
     ):
         load_env()
+        if preferred_provider and provider == "auto":
+            provider = preferred_provider
         self.provider = (provider or "auto").lower()
         self.api_key = api_key
         self.base_url = base_url
@@ -321,13 +355,130 @@ class CloudVisionClient:
         max_side: int = 1600,
         context_history: Optional[List[Dict[str, str]]] = None,
     ) -> Tuple[List[Dict[str, Any]], str]:
-        """Performs vision translation via configured or auto provider with automatic fallback."""
+        """Performs vision translation via configured or auto provider with automatic failover."""
         raw_bytes, b64_str = encode_image_for_vision(img, max_side=max_side)
         prompt = build_system_prompt(self.src_lang, self.tgt_lang, context_history=context_history)
         errors: List[str] = []
 
-        # 1. Explicit Custom / Specific provider requested by user (Groq, OpenRouter, NVIDIA, Custom, OpenAI, Mistral)
-        if self.provider in ("custom", "openai", "groq", "mistral", "nvidia") or (self.base_url and self.api_key and self.model):
+        def _try_openrouter(models: Optional[List[str]] = None) -> Optional[Tuple[List[Dict[str, Any]], str]]:
+            or_key = (self.api_key if self.provider == "openrouter" else None) or os.environ.get("OPENROUTER_API_KEY")
+            if not or_key:
+                return None
+            models_to_try = models or (
+                [self.model] if (self.model and self.provider == "openrouter") else OPENROUTER_FREE_VISION_MODELS
+            )
+            for m in models_to_try:
+                try:
+                    blocks = self._call_openai_compatible(
+                        b64_str=b64_str,
+                        base_url="https://openrouter.ai/api/v1",
+                        api_key=or_key,
+                        model_name=m,
+                        prompt=prompt,
+                    )
+                    return blocks, f"openrouter/{m}"
+                except Exception as exc:
+                    err_str = str(exc)
+                    errors.append(f"OpenRouter/{m}: {err_str[:140]}")
+                    if is_quota_or_rate_limit_error(exc):
+                        print(f"[CloudVision] Quota/429 OpenRouter atteint pour {m}. Basculement automatique vers le fournisseur de secours...")
+                        break
+            return None
+
+        def _try_nvidia_nim(models: Optional[List[str]] = None) -> Optional[Tuple[List[Dict[str, Any]], str]]:
+            nv_key = (self.api_key if self.provider == "nvidia" else None) or os.environ.get("NVIDIA_API_KEY")
+            if not nv_key:
+                return None
+            models_to_try = models or (
+                [self.model] if (self.model and self.provider == "nvidia") else NVIDIA_NIM_VISION_MODELS
+            )
+            for m in models_to_try:
+                try:
+                    blocks = self._call_openai_compatible(
+                        b64_str=b64_str,
+                        base_url="https://integrate.api.nvidia.com/v1",
+                        api_key=nv_key,
+                        model_name=m,
+                        prompt=prompt,
+                    )
+                    return blocks, f"nvidia-nim/{m}"
+                except Exception as exc:
+                    errors.append(f"NvidiaNIM/{m}: {str(exc)[:140]}")
+                    if is_permanent_quota_error(exc):
+                        break
+            return None
+
+        def _try_groq(models: Optional[List[str]] = None) -> Optional[Tuple[List[Dict[str, Any]], str]]:
+            groq_key = (self.api_key if self.provider == "groq" else None) or os.environ.get("GROQ_API_KEY")
+            if not groq_key:
+                return None
+            models_to_try = models or (
+                [self.model] if (self.model and self.provider == "groq") else [
+                    "llama-3.2-11b-vision-preview",
+                    "llama-3.2-90b-vision-preview",
+                ]
+            )
+            for m in models_to_try:
+                try:
+                    blocks = self._call_openai_compatible(
+                        b64_str=b64_str,
+                        base_url="https://api.groq.com/openai/v1",
+                        api_key=groq_key,
+                        model_name=m,
+                        prompt=prompt,
+                    )
+                    return blocks, f"groq/{m}"
+                except Exception as exc:
+                    errors.append(f"Groq/{m}: {str(exc)[:140]}")
+                    if is_permanent_quota_error(exc):
+                        break
+            return None
+
+        def _try_ollama() -> Optional[Tuple[List[Dict[str, Any]], str]]:
+            ollama_key = (self.api_key if self.provider == "ollama" else None) or os.environ.get("OLLAMA_API_KEY")
+            if not ollama_key:
+                return None
+            for m in ("gemma4:31b", "nemotron-3-nano:30b"):
+                try:
+                    blocks = self._call_openai_compatible(
+                        b64_str=b64_str,
+                        base_url="https://ollama.com/v1",
+                        api_key=ollama_key,
+                        model_name=m,
+                        prompt=prompt,
+                    )
+                    return blocks, f"ollama-cloud/{m}"
+                except Exception as exc:
+                    errors.append(f"OllamaCloud/{m}: {str(exc)[:140]}")
+                    if is_permanent_quota_error(exc):
+                        break
+            return None
+
+        def _try_gemini() -> Optional[Tuple[List[Dict[str, Any]], str]]:
+            gem_key = (self.api_key if self.provider == "gemini" else None) or os.environ.get("GEMINI_API_KEY")
+            if not gem_key:
+                return None
+            model = self.model or GEMINI_FREE_VISION_MODELS[0]
+            try:
+                blocks = self._call_gemini(raw_bytes, gem_key, model, prompt)
+                return blocks, f"gemini/{model}"
+            except Exception as e:
+                errors.append(f"Gemini/{model}: {e}")
+            return None
+
+        def _try_anthropic() -> Optional[Tuple[List[Dict[str, Any]], str]]:
+            ant_key = (self.api_key if self.provider == "anthropic" else None) or os.environ.get("ANTHROPIC_API_KEY")
+            if not ant_key:
+                return None
+            model = self.model or "claude-3-opus-20240229"
+            try:
+                blocks = self._call_anthropic(b64_str, ant_key, model, prompt)
+                return blocks, f"anthropic/{model}"
+            except Exception as e:
+                errors.append(f"Anthropic/{model}: {e}")
+            return None
+
+        def _try_custom() -> Optional[Tuple[List[Dict[str, Any]], str]]:
             preset = PROVIDER_PRESETS.get(self.provider, {})
             target_url = self.base_url or preset.get("base_url") or "https://openrouter.ai/api/v1"
             target_model = self.model or preset.get("default_model") or "gpt-4o-mini"
@@ -342,104 +493,87 @@ class CloudVisionClient:
                 return blocks, f"{self.provider}/{target_model}"
             except Exception as e:
                 errors.append(f"{self.provider}/{target_model}: {str(e)[:140]}")
-                print(f"[CloudVision] Échec sur {self.provider}/{target_model} ({e}). Basculement automatique vers les fournisseurs de secours configurés dans .env...")
+                print(f"[CloudVision] Échec sur {self.provider}/{target_model} ({e}). Basculement automatique vers les fournisseurs de secours configurés...")
+            return None
 
-        # 2. OpenRouter provider (Models: Nemotron 3.5, Qwen 2.5 VL 72B, Llama 3.2 11B)
-        or_key = (self.api_key if self.provider == "openrouter" else None) or os.environ.get("OPENROUTER_API_KEY")
-        if or_key and self.provider != "openrouter":  # if not already attempted above
-            models_to_try = [self.model] if (self.model and "openrouter" in self.provider) else [
-                "nvidia/nemotron-3.5-super-vl:free",
-                "qwen/qwen-2.5-vl-72b-instruct",
-                "meta-llama/llama-3.2-11b-vision-instruct",
-            ]
-            for m in models_to_try:
-                try:
-                    blocks = self._call_openai_compatible(
-                        b64_str=b64_str,
-                        base_url="https://openrouter.ai/api/v1",
-                        api_key=or_key,
-                        model_name=m,
-                        prompt=prompt,
-                    )
-                    return blocks, f"openrouter/{m}"
-                except Exception as exc:
-                    err_str = str(exc)
-                    errors.append(f"OpenRouter/{m}: {err_str[:140]}")
-                    if is_permanent_quota_error(exc) or "free-models-per-day" in err_str:
-                        print(f"[CloudVision] Quota OpenRouter atteint pour {m}. Basculement immédiat vers le fournisseur suivant...")
-                        break
+        # Routing according to provider
+        if self.provider == "nvidia":
+            res = _try_nvidia_nim()
+            if res:
+                return res
+            print("[CloudVision] Failover depuis NVIDIA NIM vers OpenRouter / autres fournisseurs...")
+            for fallback in (_try_openrouter, _try_groq, _try_ollama, _try_gemini, _try_anthropic):
+                res = fallback()
+                if res:
+                    return res
 
-        # 3. Groq Cloud Vision provider (LPU Ultra-rapide)
-        groq_key = (self.api_key if self.provider == "groq" else None) or os.environ.get("GROQ_API_KEY")
-        if groq_key and self.provider != "groq":
-            for m in ("llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"):
-                try:
-                    blocks = self._call_openai_compatible(
-                        b64_str=b64_str,
-                        base_url="https://api.groq.com/openai/v1",
-                        api_key=groq_key,
-                        model_name=m,
-                        prompt=prompt,
-                    )
-                    return blocks, f"groq/{m}"
-                except Exception as exc:
-                    errors.append(f"Groq/{m}: {str(exc)[:140]}")
-                    if is_permanent_quota_error(exc):
-                        break
+        elif self.provider == "openrouter":
+            res = _try_openrouter()
+            if res:
+                return res
+            print("[CloudVision] HTTP 429 / Quota OpenRouter épuisé. Basculement transparent vers NVIDIA NIM...")
+            for fallback in (_try_nvidia_nim, _try_groq, _try_ollama, _try_gemini, _try_anthropic):
+                res = fallback()
+                if res:
+                    return res
 
-        # 4. NVIDIA NIM Vision provider
-        nv_key = (self.api_key if self.provider == "nvidia" else None) or os.environ.get("NVIDIA_API_KEY")
-        if nv_key and self.provider != "nvidia":
-            for m in NVIDIA_NIM_VISION_MODELS:
-                try:
-                    blocks = self._call_openai_compatible(
-                        b64_str=b64_str,
-                        base_url="https://integrate.api.nvidia.com/v1",
-                        api_key=nv_key,
-                        model_name=m,
-                        prompt=prompt,
-                    )
-                    return blocks, f"nvidia-nim/{m}"
-                except Exception as exc:
-                    errors.append(f"NvidiaNIM/{m}: {str(exc)[:140]}")
-                    if is_permanent_quota_error(exc):
-                        break
+        elif self.provider in ("custom", "openai", "mistral") or (self.base_url and self.api_key and self.model):
+            res = _try_custom()
+            if res:
+                return res
+            print(f"[CloudVision] Failover depuis {self.provider} vers NVIDIA NIM / OpenRouter...")
+            for fallback in (_try_nvidia_nim, _try_openrouter, _try_groq, _try_ollama, _try_gemini, _try_anthropic):
+                res = fallback()
+                if res:
+                    return res
 
-        # 5. Ollama Cloud provider
-        ollama_key = (self.api_key if self.provider == "ollama" else None) or os.environ.get("OLLAMA_API_KEY")
-        if ollama_key and self.provider != "ollama":
-            for m in ("gemma4:31b", "nemotron-3-nano:30b"):
-                try:
-                    blocks = self._call_openai_compatible(
-                        b64_str=b64_str,
-                        base_url="https://ollama.com/v1",
-                        api_key=ollama_key,
-                        model_name=m,
-                        prompt=prompt,
-                    )
-                    return blocks, f"ollama-cloud/{m}"
-                except Exception as exc:
-                    errors.append(f"OllamaCloud/{m}: {str(exc)[:140]}")
+        elif self.provider == "groq":
+            res = _try_groq()
+            if res:
+                return res
+            for fallback in (_try_nvidia_nim, _try_openrouter, _try_ollama, _try_gemini, _try_anthropic):
+                res = fallback()
+                if res:
+                    return res
 
-        # 6. Native Anthropic (if configured in .env)
-        ant_key = (self.api_key if self.provider == "anthropic" else None) or os.environ.get("ANTHROPIC_API_KEY")
-        if ant_key and self.provider != "anthropic":
-            model = self.model or "claude-3-opus-20240229"
-            try:
-                blocks = self._call_anthropic(b64_str, ant_key, model, prompt)
-                return blocks, f"anthropic/{model}"
-            except Exception as e:
-                errors.append(f"Anthropic/{model}: {e}")
+        elif self.provider == "gemini":
+            res = _try_gemini()
+            if res:
+                return res
+            for fallback in (_try_nvidia_nim, _try_openrouter, _try_groq, _try_ollama, _try_anthropic):
+                res = fallback()
+                if res:
+                    return res
 
-        # 7. Google Gemini provider (ONLY if user explicitly configured GEMINI_API_KEY in .env)
-        gem_key = (self.api_key if self.provider == "gemini" else None) or os.environ.get("GEMINI_API_KEY")
-        if gem_key and self.provider != "gemini":
-            model = self.model or GEMINI_FREE_VISION_MODELS[0]
-            try:
-                blocks = self._call_gemini(raw_bytes, gem_key, model, prompt)
-                return blocks, f"gemini/{model}"
-            except Exception as e:
-                errors.append(f"Gemini/{model}: {e}")
+        elif self.provider == "anthropic":
+            res = _try_anthropic()
+            if res:
+                return res
+            for fallback in (_try_nvidia_nim, _try_openrouter, _try_groq, _try_ollama, _try_gemini):
+                res = fallback()
+                if res:
+                    return res
+
+        else:
+            # Auto mode: OpenRouter (fast/free) -> NVIDIA NIM (reliable) -> Groq -> Ollama -> Gemini -> Anthropic
+            res = _try_openrouter()
+            if res:
+                return res
+            res = _try_nvidia_nim()
+            if res:
+                return res
+            res = _try_groq()
+            if res:
+                return res
+            res = _try_ollama()
+            if res:
+                return res
+            res = _try_gemini()
+            if res:
+                return res
+            res = _try_anthropic()
+            if res:
+                return res
 
         raise RuntimeError("Échec Vision (" + " | ".join(errors) + ")")
 
@@ -511,7 +645,11 @@ class CloudVisionClient:
         model_name: str,
         prompt: str,
     ) -> List[Dict[str, Any]]:
-        """Calls any OpenAI-compatible Vision endpoint with exponential backoff."""
+        """Calls any OpenAI-compatible Vision endpoint with exponential backoff.
+        Uses a dedicated role: 'system' message for system instructions (crucial for
+        models like Llama 3.2 Vision to output clean JSON without preamble) and extracts
+        thought/reasoning tokens for reasoning models (e.g. Nemotron).
+        """
         from openai import OpenAI
         client = OpenAI(
             base_url=base_url,
@@ -526,15 +664,22 @@ class CloudVisionClient:
         )
         messages = [
             {
+                "role": "system",
+                "content": prompt,
+            },
+            {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": prompt},
+                    {
+                        "type": "text",
+                        "text": "Detect all speech bubbles, thought bubbles, and text blocks in this manga page. Output ONLY the JSON array following the system schema.",
+                    },
                     {
                         "type": "image_url",
                         "image_url": {"url": f"data:image/jpeg;base64,{b64_str}"},
                     },
                 ],
-            }
+            },
         ]
 
         def _do_call():
@@ -544,7 +689,22 @@ class CloudVisionClient:
                 temperature=0.2,
                 max_tokens=4000,
             )
-            content = resp.choices[0].message.content or ""
+            msg = resp.choices[0].message
+            content = getattr(msg, "content", None) or ""
+
+            # Handle reasoning models (such as Nemotron 3.5 Super VL, DeepSeek, etc.)
+            # where JSON output or chain-of-thought may reside in reasoning/reasoning_content
+            if not content.strip():
+                reasoning = (
+                    getattr(msg, "reasoning", None)
+                    or getattr(msg, "reasoning_content", None)
+                    or getattr(msg, "reasoning_details", None)
+                    or ""
+                )
+                if isinstance(reasoning, dict):
+                    reasoning = json.dumps(reasoning)
+                content = str(reasoning)
+
             return parse_and_validate_blocks(content)
 
         return execute_with_backoff(_do_call)

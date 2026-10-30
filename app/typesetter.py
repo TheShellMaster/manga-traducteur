@@ -52,29 +52,73 @@ def format_french_typography(text: str) -> str:
 
 
 def diamond_wrap_words(
-    draw: ImageDraw.ImageDraw,
-    words: List[str],
-    font: ImageFont.ImageFont,
-    max_w: int,
-) -> Optional[List[str]]:
+    draw: Any,
+    words: Union[List[str], str, None] = None,
+    font: Optional[Any] = None,
+    max_w: Optional[int] = None,
+    max_chars_per_line: Optional[int] = None,
+) -> List[str]:
     """
     Wraps words into an oval/diamond profile suitable for manga speech bubbles.
+    Supports both graphical wrapping (draw, words, font, max_w) and char-based
+    wrapping (text, max_chars_per_line).
     Avoids orphan words on the last line and tapers the first/last lines on 3+ line bubbles.
-    Returns None if any single word is wider than max_w.
     """
-    n = len(words)
+    if isinstance(draw, str):
+        # Character-based wrapper mode: diamond_wrap_words(text, max_chars_per_line=...)
+        text = draw.strip()
+        if not text:
+            return []
+        word_list = text.split()
+        limit = max_chars_per_line or 22
+        if len(word_list) <= 1 or len(text) <= limit:
+            return [text]
+
+        # Greedy line calculation with diamond weighting
+        lines: List[str] = []
+        cur_line: List[str] = []
+        cur_len = 0
+        for w in word_list:
+            cand = cur_len + (1 if cur_len > 0 else 0) + len(w)
+            if cand <= limit or not cur_line:
+                cur_line.append(w)
+                cur_len = cand
+            else:
+                lines.append(" ".join(cur_line))
+                cur_line = [w]
+                cur_len = len(w)
+        if cur_line:
+            lines.append(" ".join(cur_line))
+
+        # Rebalance if last line is a single isolated word and previous line has >= 2 words
+        if len(lines) >= 2 and len(lines[-1].split()) == 1:
+            prev_words = lines[-2].split()
+            if len(prev_words) >= 2:
+                last_w = prev_words.pop()
+                lines[-2] = " ".join(prev_words)
+                lines[-1] = f"{last_w} {lines[-1]}"
+        return lines
+
+    if not words:
+        return []
+
+    word_list = words if isinstance(words, list) else str(words).split()
+    n = len(word_list)
     if n == 0:
         return []
 
-    word_widths = [draw.textlength(w, font=font) for w in words]
-    space_w = draw.textlength(" ", font=font)
+    if max_w is None:
+        max_w = 400
+
+    word_widths = [draw.textlength(w, font=font) for w in word_list]
+    space_w = draw.textlength(" ", font=font) if font else 6.0
 
     if any(w > max_w for w in word_widths):
         return None
 
     total_w = sum(word_widths) + space_w * (n - 1)
     if total_w <= max_w * 0.92 or n == 1:
-        return [" ".join(words)]
+        return [" ".join(word_list)]
 
     # Prefix sums to compute width of words[i:j] in O(1)
     prefix = [0.0] * (n + 1)

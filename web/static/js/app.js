@@ -38,6 +38,8 @@
     ver: {},          // cache-busting per page
     animated: new Set(),
     anim: null,       // page index being animated
+    revealQueue: [],  // queue of finished pages awaiting sequential reveal
+    isRevealing: false,
     detectShown: null,
     dirty: false,
     sliderPct: 50,
@@ -542,23 +544,17 @@
     });
   }
 
+  function setViewMode(mode) {
+    state.mode = mode;
+    syncModeButtons();
+    if (state.anim === null && !state.isRevealing) showPage(state.cur);
+  }
+
   function updateSliderVisual() {
-    const img = $("#img-base");
-    const top = $("#img-top");
-    const divider = $("#slider-divider");
-    if (!divider || !top || !img) return;
-    if (state.mode !== "slider" || state.pages[state.cur]?.status !== "done") {
-      divider.classList.remove("on");
-      top.classList.remove("slider-active");
-      top.style.clipPath = "";
-      return;
-    }
+    const slider = $("#slider-container");
+    if (!slider) return;
     const pct = Math.max(0, Math.min(100, state.sliderPct));
-    top.classList.add("slider-active");
-    top.style.clipPath = `inset(0 calc(100% - ${pct}%) 0 0)`;
-    divider.classList.add("on");
-    const x = img.offsetLeft + (img.offsetWidth * (pct / 100));
-    divider.style.transform = `translate3d(${x}px, 0, 0)`;
+    slider.style.setProperty("--slider-pos", `${pct}%`);
   }
 
   async function showPage(i, { keepOverlay = false } = {}) {
@@ -567,28 +563,58 @@
     const p = state.pages[i];
     const base = $("#img-base");
     const top = $("#img-top");
-    const divider = $("#slider-divider");
+    const stage = $("#stage");
+    const canvas = $("#canvas");
+    const canvasSplit = $("#canvas-split");
+    const imgSplit = $("#img-split");
+    const sliderContainer = $("#slider-container");
+    const sliderOrig = $("#slider-orig");
+    const sliderTrans = $("#slider-trans");
+    const origBadge = $("#canvas-orig-badge");
 
     base.classList.add("loading");
     if (!keepOverlay) { clearOverlay(); setStep(null); }
 
-    if (state.mode === "slider" && p.status === "done") {
-      // Slider comparator mode: base = original, top = translated with clip-path
+    if (state.mode === "split") {
+      // Split mode: Side-by-side original and translated
+      stage.classList.add("mode-split");
+      stage.classList.remove("mode-slider");
+      canvas.classList.remove("hidden");
+      if (canvasSplit) canvasSplit.classList.remove("hidden");
+      if (sliderContainer) sliderContainer.classList.add("hidden");
+      if (origBadge) origBadge.classList.remove("hidden");
+
       await Promise.all([
         loadImg(base, imgUrl(i, "original")),
-        loadImg(top, imgUrl(i, "translated"))
+        loadImg(imgSplit, imgUrl(i, p?.status === "done" ? "translated" : "original"))
       ]);
-      top.classList.add("slider-active");
-      if (divider) divider.classList.add("on");
+    } else if (state.mode === "slider") {
+      // Slider comparator mode: Curseur A/B
+      stage.classList.add("mode-slider");
+      stage.classList.remove("mode-split");
+      canvas.classList.add("hidden");
+      if (canvasSplit) canvasSplit.classList.add("hidden");
+      if (sliderContainer) sliderContainer.classList.remove("hidden");
+      if (origBadge) origBadge.classList.add("hidden");
+
+      await Promise.all([
+        loadImg(sliderOrig, imgUrl(i, "original")),
+        loadImg(sliderTrans, imgUrl(i, p?.status === "done" ? "translated" : "original"))
+      ]);
       updateSliderVisual();
     } else {
+      // Single mode: "translated" or "original"
+      stage.classList.remove("mode-split", "mode-slider");
+      canvas.classList.remove("hidden");
+      if (canvasSplit) canvasSplit.classList.add("hidden");
+      if (sliderContainer) sliderContainer.classList.add("hidden");
+      if (origBadge) origBadge.classList.add("hidden");
+
       if (top) {
-        top.classList.remove("slider-active");
+        top.classList.remove("slider-active", "show");
         top.style.clipPath = "";
-        top.classList.remove("show");
       }
-      if (divider) divider.classList.remove("on");
-      const v = state.mode === "translated" && p.status === "done" ? "translated" : "original";
+      const v = state.mode === "translated" && p?.status === "done" ? "translated" : "original";
       await loadImg(base, imgUrl(i, v));
       if (v === "translated") {
         base.classList.remove("page-reveal");
@@ -600,7 +626,7 @@
     base.classList.remove("loading");
     syncOverlay();
     $("#page-indicator").textContent = `Page ${i + 1} sur ${state.total}`;
-    $("#scanline").classList.toggle("on", p.status === "processing" && state.anim !== i);
+    $("#scanline").classList.toggle("on", p?.status === "processing" && state.anim !== i);
     setActiveThumb();
     renderBubbles();
   }
@@ -721,6 +747,7 @@
     } catch (e) { toast(e.message, "err"); return; }
     state.status = "translating";
     state.animated = new Set(); state.anim = null; state.detectShown = null;
+    state.revealQueue = []; state.isRevealing = false;
     state.pages.forEach((p) => { if (p.status !== "done") p.status = "pending"; });
     $("#btn-translate").classList.add("hidden");
     $("#btn-cancel").classList.remove("hidden");
@@ -753,8 +780,15 @@
     $("#progress-label").textContent = proc >= 0 ? `Traduction de la page ${proc + 1}` : "Traduction";
     d.pages.forEach((p, i) => { if (!prev[i] || prev[i].status !== p.status) updateThumb(i); });
 
+    // Collect newly finished pages into reveal queue (no pages skipped!)
+    d.pages.forEach((p, i) => {
+      if (p.status === "done" && !state.animated.has(i) && !state.revealQueue.includes(i) && state.anim !== i) {
+        state.revealQueue.push(i);
+      }
+    });
+
     // keep the viewed page panel fresh when not animating it
-    if (state.anim !== state.cur && prev[state.cur]?.status !== d.pages[state.cur].status && !state.follow) showPage(state.cur);
+    if (state.anim !== state.cur && !state.isRevealing && prev[state.cur]?.status !== d.pages[state.cur].status && !state.follow) showPage(state.cur);
 
     if (state.follow) driveLive(prev);
 
@@ -776,29 +810,46 @@
       } else {
         $("#progress-label").textContent = "Traduction arrêtée";
       }
-      if (state.anim === null) showPage(state.cur);
+      if (state.anim === null && !state.isRevealing) showPage(state.cur);
     }
   }
 
   /* ---------------- Live view ---------------- */
   function driveLive(prev) {
-    if (state.anim !== null) return;
-    // 1. pages that just finished and haven't been revealed (most recent first, skip backlog)
-    const fresh = state.pages
-      .map((p, i) => ({ p, i }))
-      .filter(({ p, i }) => p.status === "done" && !state.animated.has(i) && prev[i] && prev[i].status !== "done");
-    if (fresh.length) {
-      fresh.slice(0, -1).forEach(({ i }) => state.animated.add(i));
-      const target = fresh[fresh.length - 1].i;
-      playReveal(target);
+    if (state.anim !== null || state.isRevealing) return;
+
+    // 1. Drain reveal queue sequentially (~1.5s - 1.8s per page)
+    if (state.revealQueue.length > 0) {
+      processRevealQueue();
       return;
     }
-    // 2. otherwise show the page being processed with the scanning effect
+
+    // 2. Otherwise show the page currently being processed with scanning effect
     const proc = state.pages.findIndex((p) => p.status === "processing");
     if (proc >= 0 && state.detectShown !== proc) {
       state.detectShown = proc;
       state.mode = "translated"; syncModeButtons();
-      showPage(proc).then(() => { if (state.anim === null) setStep("detect"); });
+      showPage(proc).then(() => { if (state.anim === null && !state.isRevealing) setStep("detect"); });
+    }
+  }
+
+  async function processRevealQueue() {
+    if (state.isRevealing) return;
+    state.isRevealing = true;
+    while (state.revealQueue.length > 0 && state.follow) {
+      const idx = state.revealQueue.shift();
+      if (!state.animated.has(idx)) {
+        await playReveal(idx);
+      }
+    }
+    state.isRevealing = false;
+    if (state.anim === null && !state.isRevealing) {
+      if (state.status !== "translating") {
+        showPage(state.cur);
+      } else {
+        const proc = state.pages.findIndex((p) => p.status === "processing");
+        if (proc >= 0) showPage(proc);
+      }
     }
   }
 
@@ -806,50 +857,67 @@
     state.anim = i;
     state.animated.add(i);
     const p = state.pages[i];
+    if (!p) { state.anim = null; return; }
     const blocks = p.blocks || [];
     const base = $("#img-base"), top = $("#img-top");
     state.cur = i;
     setActiveThumb();
     $("#page-indicator").textContent = `Page ${i + 1} sur ${state.total}`;
+
+    // Ensure stage shows single canvas during reveal
+    const stage = $("#stage");
+    stage.classList.remove("mode-split", "mode-slider");
+    $("#canvas")?.classList.remove("hidden");
+    $("#canvas-split")?.classList.add("hidden");
+    $("#slider-container")?.classList.add("hidden");
+    $("#canvas-orig-badge")?.classList.add("hidden");
+
     await loadImg(base, imgUrl(i, "original"));
     top.classList.remove("show");
     syncOverlay();
-    // 1. detected bubbles
+
+    // 1. detected bubbles (~300ms)
     setStep("detect");
     $("#scanline").classList.add("on");
-    await sleep(500);
+    await sleep(200);
     $("#scanline").classList.remove("on");
     drawBoxes(blocks);
     renderBubbles();
-    await sleep(700 + blocks.length * 90);
-    // 2. erase
+    await sleep(Math.min(300, 150 + blocks.length * 25));
+
+    // 2. erase (~350ms)
     setStep("clean");
     const cleanUrl = `/api/image/${state.sid}/clean/${i}?v=${state.ver[i] || 0}`;
     await loadImg(top, cleanUrl);
-    $$(".box").forEach((b, n) => setTimeout(() => b.classList.add("erase"), n * 70));
-    await sleep(500 + blocks.length * 70);
+    $$(".box").forEach((b) => b.classList.add("erase"));
+    await sleep(250);
     top.classList.add("show");
-    await sleep(500);
+    await sleep(100);
     $$(".box").forEach((b) => b.classList.remove("erase"));
-    // 3. rewrite
+
+    // 3. rewrite (~550ms) with matching selected typography style
     setStep("write");
     const boxes = $$(".box");
+    const fontStyle = state.settings?.font_style || "bold";
+    const perBoxDelay = Math.max(25, Math.min(100, 400 / Math.max(1, boxes.length)));
     for (let n = 0; n < boxes.length; n++) {
       const b = boxes[n];
       b.classList.add("write");
       const txt = document.createElement("div");
-      txt.className = "txt";
+      txt.className = `txt font-${fontStyle}`;
       const h = b.getBoundingClientRect().height;
       txt.style.fontSize = Math.max(8, Math.min(16, h / 5)) + "px";
       b.appendChild(txt);
-      typeText(txt, blocks[n].translation || blocks[n].fr || "");
-      await sleep(Math.min(260, 1400 / Math.max(1, boxes.length)));
+      typeText(txt, blocks[n]?.translation || blocks[n]?.fr || "");
+      b.classList.add("done");
+      if (boxes.length <= 6) await sleep(perBoxDelay);
     }
-    await sleep(800);
-    // 4. final image
+    await sleep(250);
+
+    // 4. final image (~350ms)
     await loadImg(top, imgUrl(i, "translated"));
     $("#overlay").classList.add("fade");
-    await sleep(600);
+    await sleep(200);
     await loadImg(base, imgUrl(i, "translated"));
     base.classList.remove("page-reveal");
     void base.offsetWidth;
@@ -926,34 +994,53 @@
     });
     $("#btn-prev").onclick = () => navPage(-1);
     $("#btn-next").onclick = () => navPage(1);
-    $("#follow-live").onchange = (e) => { state.follow = e.target.checked; state.detectShown = null; };
-    $$("#view-mode button").forEach((b) => b.onclick = () => {
-      state.mode = b.dataset.mode;
-      syncModeButtons();
-      if (state.anim === null) showPage(state.cur);
-    });
+    $("#follow-live").onchange = (e) => {
+      state.follow = e.target.checked;
+      state.detectShown = null;
+      if (state.follow && !state.isRevealing) processRevealQueue();
+    };
+    $$("#view-mode button").forEach((b) => b.onclick = () => setViewMode(b.dataset.mode));
 
-    // hold to compare & reactive slider drag
-    const canvas = $("#canvas");
-    let holdT = null, startX = 0, isDraggingSlider = false;
+    // Comparison slider drag interaction
+    const sliderContainer = $("#slider-container");
+    let isDraggingSlider = false;
 
     function setSliderFromPointer(e) {
-      const img = $("#img-base");
-      const rect = img.getBoundingClientRect();
+      if (!sliderContainer) return;
+      const rect = sliderContainer.getBoundingClientRect();
       if (rect.width <= 0) return;
       const relX = e.clientX - rect.left;
       state.sliderPct = Math.max(0, Math.min(100, (relX / rect.width) * 100));
       updateSliderVisual();
     }
 
+    if (sliderContainer) {
+      sliderContainer.addEventListener("pointerdown", (e) => {
+        isDraggingSlider = true;
+        try { sliderContainer.setPointerCapture(e.pointerId); } catch {}
+        setSliderFromPointer(e);
+      });
+      sliderContainer.addEventListener("pointermove", (e) => {
+        if (isDraggingSlider) {
+          setSliderFromPointer(e);
+        }
+      });
+      const stopSlider = (e) => {
+        if (isDraggingSlider) {
+          isDraggingSlider = false;
+          try { sliderContainer.releasePointerCapture(e.pointerId); } catch {}
+        }
+      };
+      ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => sliderContainer.addEventListener(ev, stopSlider));
+    }
+
+    // Canvas hold-to-compare (180ms) and swipe navigation
+    const canvas = $("#canvas");
+    let holdT = null, startX = 0;
+
     canvas.addEventListener("pointerdown", (e) => {
       startX = e.clientX;
       if (state.anim !== null) return;
-      if (state.mode === "slider" && state.pages[state.cur]?.status === "done") {
-        isDraggingSlider = true;
-        setSliderFromPointer(e);
-        return;
-      }
       if (state.pages[state.cur]?.status !== "done" || state.mode !== "translated") return;
       holdT = setTimeout(async () => {
         const top = $("#img-top");
@@ -962,18 +1049,8 @@
       }, 180);
     });
 
-    canvas.addEventListener("pointermove", (e) => {
-      if (isDraggingSlider) {
-        setSliderFromPointer(e);
-      }
-    });
-
     const release = (e) => {
       clearTimeout(holdT);
-      if (isDraggingSlider) {
-        isDraggingSlider = false;
-        return;
-      }
       if (state.anim === null && state.mode !== "slider") $("#img-top").classList.remove("show");
       if (e && e.type === "pointerup" && Math.abs(e.clientX - startX) > 60 && state.mode !== "slider") {
         navPage(e.clientX < startX ? 1 : -1);

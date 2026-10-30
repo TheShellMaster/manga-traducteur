@@ -860,6 +860,15 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
             mask_style=mask_style,
             context_history=ctx_snapshot,
         )
+        with context_lock:
+            for b in res.get("blocks", []):
+                if b.get("original") or b.get("translation"):
+                    context_history.append({
+                        "original": b.get("original", ""),
+                        "translation": b.get("translation", ""),
+                    })
+            if len(context_history) > 12:
+                context_history[:] = context_history[-12:]
         return page_idx, res
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
