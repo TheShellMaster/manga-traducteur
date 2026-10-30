@@ -1,76 +1,163 @@
 # 📖 Manga Translator Studio (100% Cloud Vision & Scanlation Pro)
 
-Application Web moderne de traduction automatique de mangas et comics conçue pour fonctionner avec **zéro modèle neuronal local** (`< 90 Mo` de RAM au repos, aucun GPU requis). Toute l'intelligence visuelle (OCR + Traduction contextuelle) est déléguée aux APIs Cloud gratuites ou personnalisées.
-
-![Aperçu Desktop 1440px](docs/screenshots/desktop_1440.png)
+Application Web moderne de traduction automatique de mangas, manhwas et comics, conçue pour fonctionner avec **zéro modèle lourd local** (`< 50 Mo` de RAM au repos, aucun GPU requis). Toute la puissance d'analyse visuelle (OCR, détection de bulles et traduction contextuelle) est déléguée aux APIs Cloud gratuites ou personnalisées, avec traitement **multithread parallèle (jusqu'à 3 pages en simultané)**.
 
 ---
 
 ## ✨ Fonctionnalités Principales
 
-### 1. Qualité « Scanlation Pro »
-- **Masquage Intelligent des Bulles (`smart`)** :
-  - Analyse locale d'histogramme C-accélérée (`Pillow`) sur chaque boîte (+8 % de marge).
-  - **Préservation des contours de bulles** : détection des composantes connexes reliées au bord pour effacer uniquement les traits d'encre internes (texte source) avec dilatation morphologique (`MaxFilter(5)`) et adoucissement (`GaussianBlur(1.2)`) sans jamais mordre sur le cadre noir de la bulle.
-  - **Détection automatique Fond Clair / Fond Sombre / Trame (Screentone)** : les boîtes de narration noires ou sombres (`médiane < 128`) sont nettoyées en sombre et composées automatiquement en texte blanc (`#FFFFFF`) avec contour de sécurité.
-- **Typographie Manga en Losange (Diamond Word-Wrap)** :
-  - Programmation dynamique équilibrant la largeur des lignes selon un profil ovale/losange et évitant les mots orphelins en fin de bulle.
-  - Règles typographiques françaises automatiques (espaces insécables avant `!`, `?`, `:`, `;` et dans `« … »`).
-  - Marge interne garantie de 11 % de chaque côté.
-- **Continuité Contextuelle Inter-Pages & Raffinement Groq** :
-  - Conserve les 8 dernières répliques traduites d'une page à l'autre pour harmoniser les noms propres, le genre et le tutoiement/vouvoiement.
-  - Raffinement systématique de toutes les bulles de la page par **Groq** (`qwen/qwen3.8-27b`) lorsqu'une clé Groq est configurée.
-- **Éditeur de Bulles en Direct** :
-  - Panneau latéral repliable **« 💬 Bulles détectées »** permettant de modifier le texte traduit de n'importe quelle bulle et de régénérer la planche instantanément via `POST /api/rerender/{session_id}/{page_idx}` sans rappeler l'API Vision.
+### 1. 🖼️ Formats Universels & Restitution au Format Exact
+- **Archives complètes** : `.cbz`, `.cbr`, `.rar`, `.zip`.
+- **Dossiers complets** : Import par glisser-déposer de dossiers entiers de chapitres (`webkitdirectory`).
+- **Planches isolées** : `.png`, `.jpg`, `.jpeg`, `.webp`.
+- **Export fidèle** : Le manga traduit est recompressé automatiquement dans le **même format d'origine** (ou téléchargé en un clic au format CBZ standard pour liseuses).
 
-### 2. Liseuse Interactive & Formats Universels
-- **Formats supportés en entrée et sortie** : `.cbz`, `.cbr`, `.rar`, `.zip`, **Dossiers complets** (`webkitdirectory`), et **Images seules** (`.png`, `.jpg`, `.webp`).
-- **3 Modes de lecture** :
-  1. **Côte à côte (Split-View)** : Original à gauche, Traduit à droite.
-  2. **Page unique** : Bascule instantanée Original / Traduit.
-  3. **Slider Avant / Après interactif** : Curseur glissable (`clip-path`) superposant la planche originale et la planche traduite.
-- **Outils de confort** : Thème Clair / Sombre persistant, Zoom (`50%` à `250%` + `Ctrl + Molette`), Mode Plein Écran (`F`), raccourcis clavier (`←`/`→`, `1`/`2`/`3`), retraduction d'une page isolée, annulation en cours de tâche et estimation du temps restant (ETA).
+### 2. 👁️ 4 Modes de Visualisation & Liseuse Intégrée
+1. **Comparateur Côte à Côte (Split-View)** : Planche originale à gauche, planche traduite à droite.
+2. **Liseuse Seule** : Lecture plein écran de la version traduite avec bascule instantanée.
+3. **Slider Interactif Avant / Après** : Curseur glissable superposant l'original et la version traduite en temps réel.
+4. **Mode Webtoon (Défilement Continu)** : Lecture verticale sans coupure de tout le chapitre, particulièrement adaptée aux manhwas et webtoons.
+- **Sens de lecture Manga (RTL)** : Bascule instantanée entre le sens japonais (Droite ➜ Gauche) et occidental (Gauche ➜ Droite).
+
+### 3. 🎨 Qualité « Scanlation Pro » & Typographie Manga
+- **Masquage Intelligent des Bulles (`smart`)** :
+  - **Préservation des contours de bulles** : Analyse d'histogramme en C (`Pillow`) et détection des composantes connexes au bord pour effacer uniquement les kanjis/textes internes sans jamais effacer le contour noir de la bulle.
+  - **Détection automatique Fond Sombre / Clair** : Les cartouches de narration sombres sont préservées et composées en texte blanc avec contour de sécurité.
+- **Typographie en Losange (Diamond Word-Wrap)** :
+  - Programmation dynamique équilibrant les lignes de texte pour épouser la forme ovale naturelle des bulles de manga et éliminer les mots orphelins.
+  - Typographie française soignée (espaces insécables automatiques avant `!`, `?`, `:`, `;` et dans `« … »`).
+- **Éditeur de Bulles en Direct (< 50 ms)** :
+  - Panneau latéral **« 💬 Bulles »** permettant d'ajuster ou réécrire n'importe quelle réplique en direct sans relancer l'API.
+
+### 4. ⚡ Vitesse & Ergonomie
+- **Traduction Parallèle Multi-Pages** : Traitement de 2 à 3 pages en simultané, divisant le temps d'attente total par ~2.5x.
+- **Flux LLM en Direct** : Visualisation en temps réel des répliques traduites au fur et à mesure que l'IA les analyse.
+- **Résilience au Rechargement (F5)** : Si vous actualisez votre navigateur pendant ou après une traduction, votre session et votre progression sont immédiatement restaurées via `localStorage`.
+- **Historique Persistant des Mangas** : Retrouvez tous vos chapitres traduits dans le panneau **« 📜 Historique »** pour les relire ou les télécharger à tout moment.
 
 ---
 
-## 🚀 Installation & Lancement en 1 Clic
+## 🔑 Guide d'Obtention des Clés d'API 100% Gratuites (Sans Carte Bancaire)
+
+Manga Translator Studio n'a besoin d'aucune configuration manuelle complexe : **vous n'avez aucun nom de modèle ni aucune URL à copier**. Collez simplement votre clé dans l'application, et la liste déroulante affiche automatiquement les vrais modèles autorisés.
+
+### 1. Google Gemini (Recommandé - Vision Haute Fidélité)
+Google offre un quota gratuit extrêmement généreux sur ses meilleurs modèles Vision.
+- **Site officiel** : [Google AI Studio](https://aistudio.google.com/)
+- **Quota gratuit** : **1 500 requêtes gratuites par jour** (largement de quoi traduire 50 à 75 chapitres complets par jour).
+- **Étapes pas-à-pas** :
+  1. Rendez-vous sur [aistudio.google.com](https://aistudio.google.com/) et connectez-vous avec votre compte Google.
+  2. Cliquez sur le bouton bleu **« Get API key »** (en haut à gauche).
+  3. Cliquez sur **« Create API key »** (dans un nouveau projet ou un projet existant).
+  4. Copiez votre clé d'API (commençant par `AIzaSy...`).
+  5. Dans Manga Translator Studio, ouvrez **⚙️ Paramètres & APIs**, choisissez **Google Gemini**, collez votre clé et cliquez sur Enregistrer. Les modèles `gemini-2.5-flash` et `gemini-1.5-flash` sont automatiquement prêts !
+
+### 2. Groq (Recommandé - Raffinement Instantané du Français)
+Groq utilise des processeurs LPU ultra-rapides capables de polir vos dialogues en français naturel en moins de 300 millisecondes.
+- **Site officiel** : [Groq Console](https://console.groq.com/)
+- **Quota gratuit** : Gratuit pour un usage quotidien personnel.
+- **Étapes pas-à-pas** :
+  1. Créez un compte sur [console.groq.com](https://console.groq.com/).
+  2. Rendez-vous dans l'onglet **« API Keys »** dans le menu de gauche.
+  3. Cliquez sur **« Create API Key »**, donnez-lui un nom (ex: `manga-traducteur`) et copiez la clé `gsk_...`.
+  4. Collez cette clé dans la case **Clé d'API Groq** des Paramètres de l'application.
+
+### 3. OpenRouter (Multi-Fournisseurs & Modèles Vision Gratuits)
+OpenRouter permet d'accéder à des dizaines de modèles Vision sans installer quoi que ce soit.
+- **Site officiel** : [OpenRouter.ai](https://openrouter.ai/)
+- **Étapes pas-à-pas** :
+  1. Créez un compte gratuit sur [openrouter.ai](https://openrouter.ai/).
+  2. Cliquez sur votre profil ➜ **« Keys »** ➜ **« Create a Key »**.
+  3. Copiez la clé (`sk-or-v1-...`).
+  4. Dans Manga Translator Studio, sélectionnez **OpenRouter** et collez votre clé : l'application charge en direct tous les modèles Vision gratuits signalés par `✨ (Gratuit)` (ex: `nvidia/nemotron-3.5-super-vl:free`).
+
+---
+
+## 💻 Guide d'Installation selon votre Système
 
 ### Prérequis
-- Linux / macOS / Windows (WSL) avec **Python 3.12+**
-- Outils d'archives système optionnels pour le format `.cbr`/`.rar` : `unrar` ou `7z`
+- **Python 3.10 ou supérieur** (Python 3.11, 3.12 ou 3.14 recommandés).
+- Utilitaires d'archives pour ouvrir les fichiers `.cbr` et `.rar`.
 
-### Démarrage rapide
+### 1. Ubuntu / Debian / Linux Mint
+Ouvrez votre terminal et exécutez :
 ```bash
-git clone <url-du-depot>
-cd traducteur
-./lancer_manga_translator.sh
+sudo apt update && sudo apt install -y python3-venv python3-pip unrar p7zip-full fonts-dejavu-core
 ```
-Le script crée/utilise l'environnement virtuel, démarre le serveur local sur `http://127.0.0.1:8000` et ouvre automatiquement votre navigateur.
 
-Vous pouvez également double-cliquer sur le raccourci Bureau **`Manga Translator Studio`**.
+### 2. Fedora / Red Hat / RHEL
+```bash
+sudo dnf install -y python3 python3-pip unrar p7zip dejavu-sans-fonts
+```
+
+### 3. Arch Linux / Manjaro
+```bash
+sudo pacman -S --needed python python-pip unrar p7zip ttf-dejavu
+```
+
+### 4. macOS (via Homebrew)
+```bash
+brew install python unrar p7zip
+```
+
+### 5. Windows (via WSL2 Ubuntu)
+Installez WSL2 puis suivez les instructions Ubuntu ci-dessus.
 
 ---
 
-## 🔑 Configuration des Clés d'API
+## 📦 Installation & Démarrage du Projet
 
-Copiez le fichier d'exemple ou configurez vos clés directement depuis le bouton **⚙️ Paramètres & API** de l'interface Web :
+1. **Cloner le dépôt ou accéder au dossier** :
+   ```bash
+   cd traducteur
+   ```
+
+2. **Créer l'environnement virtuel Python** :
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+3. **Installer les dépendances requises** :
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+---
+
+## 🚀 Lancement en 1 Clic
+
+### Option A : Depuis le Bureau (Raccourci Desktop)
+Double-cliquez simplement sur l'icône **Manga Translator Studio** présente sur votre Bureau.
+
+### Option B : Depuis le Terminal
 ```bash
-cp .env.example .env
+./lancer_manga_translator.sh
 ```
+*Le script vérifie automatiquement l'environnement, démarre le serveur local et ouvre votre navigateur Web à l'adresse `http://localhost:8000`.*
 
-| Fournisseur | Variable `.env` | Usage |
-| :--- | :--- | :--- |
-| **Google Gemini** | `GEMINI_API_KEY` | Vision + Traduction (1500 req/jour gratuites via Google AI Studio) |
-| **OpenRouter** | `OPENROUTER_API_KEY` | Modèles Vision gratuits (`google/gemma-4-31b-it:free`, `nvidia/nemotron-3.5-super-vl:free`, etc.) |
-| **Groq** | `GROQ_API_KEY` | Polissage ultra-rapide des dialogues en français naturel (`qwen/qwen3.8-27b`) |
-| **Ollama Cloud / NVIDIA NIM** | `OLLAMA_API_KEY` / `NVIDIA_API_KEY` | Fournisseurs Cloud Vision de repli automatique |
-| **Custom OpenAI** | `CUSTOM_BASE_URL`, `CUSTOM_API_KEY`, `CUSTOM_MODEL` | Tout serveur compatible OpenAI Vision (`/v1/chat/completions`) |
+---
+
+## ⌨️ Raccourcis Clavier & Astuces
+
+| Raccourci | Action |
+| :---: | :--- |
+| `←` / `→` | **Page précédente / Page suivante** (s'inverse automatiquement en mode RTL Manga) |
+| `1` | Mode **Comparateur Côte à Côte** |
+| `2` | Mode **Liseuse Seule** |
+| `3` | Mode **Slider Interactif** Avant / Après |
+| `4` | Mode **Webtoon** (défilement vertical sans interruption) |
+| `R` | Basculer entre sens de lecture **Japonais RTL** (`🇯🇵 ←`) et **Occidental LTR** (`🌍 →`) |
+| `F` | Activer / Quitter le **Plein Écran** |
+| `Ctrl` + `Molette` | **Zoom fluide** sur la planche affichée (`50%` à `250%`) |
+| **Clic sur une bulle** | Ouvre l'éditeur latéral pour retoucher le texte français en direct (< 50 ms) |
+| **F5 (Actualiser)** | Restauration automatique et transparente de votre session sans perte de données |
 
 ---
 
 ## 🧪 Tests Automatisés
 
-La suite de tests `pytest` (33 tests unitaires et d'intégration) vérifie le parseur JSON, la désambiguïsation des coordonnées bbox, la matrice 4×4 du typesetter, le masque intelligent (`smart`), le raffinement Groq, l'extraction/recompression d'archives et tous les endpoints FastAPI :
+Le projet comprend une suite complète de **35 tests unitaires et d'intégration** (vérifiant la détection de bulles, le parseur JSON robuste, la calibration du masque anti-aplat noir, la résilience aux coupures d'API et la parallélisation) :
 
 ```bash
 ./venv/bin/pytest tests/ -q
@@ -78,14 +165,6 @@ La suite de tests `pytest` (33 tests unitaires et d'intégration) vérifie le pa
 
 ---
 
-## 📱 Aperçu Responsive (Mobile, Tablette, Desktop)
-
-| Mobile (`375px`) | Tablette (`768px`) | Desktop (`1440px`) |
-| :---: | :---: | :---: |
-| ![Mobile](docs/screenshots/mobile_375.png) | ![Tablette](docs/screenshots/tablet_768.png) | ![Desktop](docs/screenshots/desktop_1440.png) |
-
----
-
 ## 📄 Licence
 
-Distribué sous licence [MIT](LICENSE).
+Distribué sous licence **MIT**. Développé pour la communauté scanlation et les amateurs de manga.
