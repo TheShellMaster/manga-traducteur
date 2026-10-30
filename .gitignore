@@ -22,3 +22,7 @@ Otome Game Sekai wa Mob ni Kibishii Sekai desu/
 /tmp/
 .DS_Store
 Thumbs.db
+
+# Persistent Storage & Cache (Never commit cached images or output mangas)
+data/*
+!data/.gitkeep

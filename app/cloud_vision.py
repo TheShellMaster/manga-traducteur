@@ -88,6 +88,40 @@ def encode_image_for_vision(img: Image.Image, max_side: int = 1600) -> Tuple[byt
     return raw_bytes, b64_str
 
 
+def is_transient_error(exc: Exception) -> bool:
+    """Detects whether an API exception is transient (rate limit 429, 503 overload, timeout)."""
+    err_str = str(exc).lower()
+    transient_indicators = [
+        "429", "rate limit", "too many requests", "resourceexhausted", "quota",
+        "503", "502", "504", "service unavailable", "bad gateway", "gateway timeout",
+        "overloaded", "server is busy", "timeout", "timed out",
+        "connection reset", "connection refused", "remoteprotocolerror", "try again",
+    ]
+    return any(ind in err_str for ind in transient_indicators)
+
+
+def execute_with_backoff(
+    func,
+    *args,
+    max_retries: int = 3,
+    initial_delay: float = 2.0,
+    backoff_factor: float = 2.0,
+    **kwargs,
+):
+    """Executes an API call with automatic exponential backoff on transient errors (429/503/timeouts)."""
+    delay = initial_delay
+    for attempt in range(1, max_retries + 1):
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            if attempt < max_retries and is_transient_error(exc):
+                print(f"[CloudVision] Erreur temporaire détectée ({type(exc).__name__}: {str(exc)[:90]}). Nouvelle tentative {attempt + 1}/{max_retries} après {delay:.1f}s...")
+                time.sleep(delay)
+                delay *= backoff_factor
+            else:
+                raise
+
+
 def parse_and_validate_blocks(raw_text: str) -> List[Dict[str, Any]]:
     """
     Extracts JSON blocks from model response and validates/disambiguates normalized coordinates.
@@ -359,57 +393,64 @@ class CloudVisionClient:
         raise RuntimeError("Échec Vision (" + " | ".join(errors) + ")")
 
     def _call_anthropic(self, b64_str: str, api_key: str, model_name: str, prompt: str) -> List[Dict[str, Any]]:
-        """Calls Anthropic Claude vision API."""
+        """Calls Anthropic Claude vision API with exponential backoff on rate limits."""
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model=model_name,
-            max_tokens=4000,
-            temperature=0.2,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": b64_str,
+
+        def _do_call():
+            response = client.messages.create(
+                model=model_name,
+                max_tokens=4000,
+                temperature=0.2,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": b64_str,
+                                },
                             },
-                        },
-                        {"type": "text", "text": prompt},
-                    ],
-                }
-            ],
-        )
-        content = ""
-        for block in response.content:
-            if getattr(block, "text", None):
-                content += block.text
-        return parse_and_validate_blocks(content)
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
+                ],
+            )
+            content = ""
+            for block in response.content:
+                if getattr(block, "text", None):
+                    content += block.text
+            return parse_and_validate_blocks(content)
+
+        return execute_with_backoff(_do_call)
 
     def _call_gemini(self, image_bytes: bytes, api_key: str, model_name: str, prompt: str) -> List[Dict[str, Any]]:
-        """Calls Gemini via google.generativeai or google.genai."""
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            gmodel = genai.GenerativeModel(model_name)
-            img_part = {"mime_type": "image/jpeg", "data": image_bytes}
-            response = gmodel.generate_content([img_part, prompt])
-            return parse_and_validate_blocks(response.text)
-        except Exception:
+        """Calls Gemini via google.generativeai or google.genai with exponential backoff."""
+        def _do_call():
             try:
-                from google import genai
-                from google.genai import types
-                client = genai.Client(api_key=api_key)
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=[types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"), prompt],
-                )
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                gmodel = genai.GenerativeModel(model_name)
+                img_part = {"mime_type": "image/jpeg", "data": image_bytes}
+                response = gmodel.generate_content([img_part, prompt])
                 return parse_and_validate_blocks(response.text)
-            except Exception as e:
-                raise RuntimeError(f"Gemini API error ({model_name}): {e}")
+            except Exception:
+                try:
+                    from google import genai
+                    from google.genai import types
+                    client = genai.Client(api_key=api_key)
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=[types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"), prompt],
+                    )
+                    return parse_and_validate_blocks(response.text)
+                except Exception as e:
+                    raise RuntimeError(f"Gemini API error ({model_name}): {e}")
+
+        return execute_with_backoff(_do_call)
 
     def _call_openai_compatible(
         self,
@@ -419,7 +460,7 @@ class CloudVisionClient:
         model_name: str,
         prompt: str,
     ) -> List[Dict[str, Any]]:
-        """Calls any OpenAI-compatible Vision endpoint."""
+        """Calls any OpenAI-compatible Vision endpoint with exponential backoff."""
         from openai import OpenAI
         client = OpenAI(
             base_url=base_url,
@@ -444,11 +485,15 @@ class CloudVisionClient:
                 ],
             }
         ]
-        resp = client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            temperature=0.2,
-            max_tokens=4000,
-        )
-        content = resp.choices[0].message.content or ""
-        return parse_and_validate_blocks(content)
+
+        def _do_call():
+            resp = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=0.2,
+                max_tokens=4000,
+            )
+            content = resp.choices[0].message.content or ""
+            return parse_and_validate_blocks(content)
+
+        return execute_with_backoff(_do_call)

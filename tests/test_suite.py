@@ -453,4 +453,98 @@ def test_api_models_fetch_endpoint():
     assert any("gpt-4o" in m["id"] for m in d_oa["models"])
 
 
+# =====================================================================
+# 11. Tests Robustesse I/O, Sécurité Zip-Slip, Cache & Bibliothèque
+# =====================================================================
+
+def test_zip_slip_security_prevention(tmp_path):
+    evil_zip = tmp_path / "malicious.cbz"
+    with zipfile.ZipFile(evil_zip, "w") as z:
+        # Write an entry attempting to escape to parent directory
+        z.writestr("../../etc/cron.d/evil.sh", b"malicious payload")
+    
+    work_dir = tmp_path / "work"
+    work_dir.mkdir()
+    with pytest.raises(ValueError, match="Zip-Slip|Path Traversal"):
+        ArchiveHandler.extract(evil_zip, work_dir)
+
+
+def test_empty_file_rejected_properly(tmp_path):
+    empty_file = tmp_path / "empty.cbz"
+    empty_file.write_bytes(b"")
+    with pytest.raises(ValueError, match="vide"):
+        ArchiveHandler.detect_format(empty_file)
+
+    # API upload rejection test
+    res = client.post(
+        "/api/upload",
+        files={"file": ("empty.cbz", io.BytesIO(b""), "application/octet-stream")}
+    )
+    assert res.status_code == 400
+    assert "vide" in res.json().get("detail", "").lower()
+
+
+def test_exponential_backoff_retry():
+    from app.cloud_vision import execute_with_backoff
+
+    call_count = 0
+
+    def flaky_api():
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise RuntimeError("HTTP 429 Too Many Requests - Rate limit exceeded")
+        return [{"box": [10, 10, 50, 50], "original": "Hi", "translation": "Salut"}]
+
+    # Should succeed on attempt 3
+    res = execute_with_backoff(flaky_api, max_retries=3, initial_delay=0.01, backoff_factor=1.5)
+    assert len(res) == 1
+    assert res[0]["translation"] == "Salut"
+    assert call_count == 3
+
+
+def test_persistent_caching_and_library_endpoint(tmp_path):
+    from server import _load_cached_page_blocks, _save_cached_page_blocks, OUTPUT_DIR
+
+    fake_bytes = b"fake-manga-page-image-bytes-12345"
+    tgt_lang = "French"
+
+    # 1. Verify initially not cached
+    assert _load_cached_page_blocks(fake_bytes, tgt_lang) is None
+
+    # 2. Save blocks to cache
+    mock_blocks = [{"box": [50, 50, 200, 100], "fr": "Test en cache"}]
+    _save_cached_page_blocks(fake_bytes, tgt_lang, mock_blocks, "MockModel")
+
+    # 3. Retrieve from cache
+    cached = _load_cached_page_blocks(fake_bytes, tgt_lang)
+    assert cached is not None
+    loaded_blocks, model_label = cached
+    assert loaded_blocks[0]["fr"] == "Test en cache"
+    assert "cache" in model_label.lower()
+
+    # 4. Test GET /api/library
+    dummy_out = OUTPUT_DIR / "sample_test_translated.cbz"
+    dummy_out.write_bytes(b"dummy-cbz-content")
+    try:
+        res = client.get("/api/library")
+        assert res.status_code == 200
+        lib = res.json()
+        assert "library" in lib
+        assert any(item["filename"] == "sample_test_translated.cbz" for item in lib["library"])
+    finally:
+        dummy_out.unlink(missing_ok=True)
+
+
+def test_system_check_update_endpoint():
+    res = client.get("/api/system/check_update")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "ok"
+    assert "current_commit" in data
+    assert "up_to_date" in data
+    assert data["version"] == "2.1.0"
+
+
+
 

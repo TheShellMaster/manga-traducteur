@@ -147,13 +147,21 @@ document.addEventListener('DOMContentLoaded', () => {
     initDragAndDrop();
     initSettings();
     initHistory();
+    initLibrary();
     initHelpModal();
     initNavigation();
     initViewModes();
     initSliderCompare();
     initZoomAndFullscreen();
     initSlowMotionMouseEngine();
+    checkSystemUpdate();
     restoreActiveSessionOnLoad();
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/static/sw.js').catch(err => console.debug('SW reg failed:', err));
+        });
+    }
 });
 
 // Theme Toggle (Light / Dark) stored in localStorage
@@ -1285,6 +1293,83 @@ window.openHistorySession = async function(sessionId) {
         showToast("Erreur ouverture session : " + err.message, "error");
     }
 };
+
+// Permanent Library logic (data/output/)
+function initLibrary() {
+    const btnOpen = document.getElementById('btn-open-library');
+    const btnClose = document.getElementById('btn-close-library');
+    const btnCloseFooter = document.getElementById('btn-close-library-footer');
+    const libraryModal = document.getElementById('library-modal');
+    const libraryList = document.getElementById('library-list');
+
+    async function loadLibrary() {
+        if (!libraryList) return;
+        libraryList.innerHTML = '<p class="box-hint">Chargement des mangas traduits...</p>';
+        try {
+            const res = await fetch('/api/library');
+            const data = await res.json();
+            const items = data.library || [];
+            if (!items.length) {
+                libraryList.innerHTML = '<p class="box-hint">Aucun manga archivé dans data/output pour l\'instant.</p>';
+                return;
+            }
+            libraryList.innerHTML = items.map(it => `
+                <div class="history-item" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+                    <div>
+                        <strong style="font-size: 14px; display: block; color: var(--text-primary);">📖 ${it.filename}</strong>
+                        <small style="color: var(--text-secondary);">${it.date} • ${it.size_mb} Mo • Format ${it.format.toUpperCase()}</small>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <a href="${it.download_url}" class="btn btn-sm btn-primary" download>💾 Télécharger</a>
+                    </div>
+                </div>
+            `).join('');
+        } catch (err) {
+            libraryList.innerHTML = '<p class="box-hint" style="color: var(--danger);">Erreur lors du chargement de la bibliothèque.</p>';
+        }
+    }
+
+    if (btnOpen) {
+        btnOpen.addEventListener('click', () => {
+            loadLibrary();
+            if (libraryModal) libraryModal.classList.remove('hidden');
+        });
+    }
+    if (btnClose && libraryModal) {
+        btnClose.addEventListener('click', () => libraryModal.classList.add('hidden'));
+    }
+    if (btnCloseFooter && libraryModal) {
+        btnCloseFooter.addEventListener('click', () => libraryModal.classList.add('hidden'));
+    }
+}
+
+// GitHub Auto-Update Check
+async function checkSystemUpdate() {
+    const pill = document.getElementById('pill-update');
+    if (!pill) return;
+    try {
+        const res = await fetch('/api/system/check_update');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.up_to_date) {
+            pill.textContent = `🟢 v${data.version} (À jour)`;
+            pill.title = `Version ${data.version} (${data.current_commit}) synchronisée avec origin/main`;
+            pill.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+            pill.style.color = '#34d399';
+        } else {
+            pill.textContent = `⬆️ v${data.version} (Mise à jour dispo)`;
+            pill.title = `Nouvelle version disponible sur GitHub (${data.latest_commit}) !`;
+            pill.style.borderColor = 'rgba(245, 158, 11, 0.5)';
+            pill.style.color = '#fbbf24';
+            pill.style.cursor = 'pointer';
+            pill.onclick = () => {
+                showToast(`Nouvelle mise à jour détectée (${data.current_commit} ➜ ${data.latest_commit}). Lancez 'git pull' pour l'appliquer.`, 'info', 6000);
+            };
+        }
+    } catch (e) {
+        pill.textContent = 'v2.1';
+    }
+}
 
 // Slow-Motion Mouse-Following Physics Engine (T12)
 function initSlowMotionMouseEngine() {

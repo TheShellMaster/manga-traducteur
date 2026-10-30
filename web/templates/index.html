@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manga Translator Studio | AI Cloud Vision</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#6366f1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Manga Translator">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23f43f5e'/%3E%3Cstop offset='100%25' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='900' font-size='28'%3E漫%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="/static/css/animations.css">
@@ -26,11 +31,15 @@
             <span class="status-pill" id="pill-gemini" title="Statut clé Google Gemini">Gemini : —</span>
             <span class="status-pill" id="pill-openrouter" title="Statut clé OpenRouter">OpenRouter : —</span>
             <span class="status-pill" id="pill-groq" title="Statut clé Groq">Groq : —</span>
+            <span class="status-pill" id="pill-update" title="Statut de mise à jour GitHub">v2.1 (Vérification...)</span>
         </div>
 
         <div class="header-actions">
             <button id="btn-theme-toggle" class="btn btn-icon" aria-label="Basculer le thème clair ou sombre" title="Thème Clair / Sombre">
                 <span id="theme-icon">🌙</span>
+            </button>
+            <button id="btn-open-library" class="btn btn-secondary" aria-label="Ouvrir la bibliothèque permanente des mangas">
+                📚 Bibliothèque
             </button>
             <button id="btn-open-history" class="btn btn-secondary" aria-label="Ouvrir l'historique des traductions">
                 📜 Historique
@@ -507,6 +516,25 @@
         </div>
     </div>
 
+    <!-- Permanent Library Modal -->
+    <div id="library-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-library-title">
+        <div class="modal-content" style="max-width: 680px;">
+            <div class="modal-header">
+                <h2 id="modal-library-title">📚 Bibliothèque Permanente (data/output)</h2>
+                <button id="btn-close-library" class="btn-close" aria-label="Fermer la bibliothèque">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="box-hint" style="margin-bottom: 12px;">Mangas traduits conservés indéfiniment sur votre machine :</p>
+                <div id="library-list" class="history-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow-y: auto;">
+                    <p class="box-hint">Chargement de la bibliothèque...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-close-library-footer" class="btn btn-secondary">Fermer</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Help & Keyboard Shortcuts Modal -->
     <div id="help-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-help-title">
         <div class="modal-content" style="max-width: 640px;">
@@ -569,7 +597,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button id="btn-close-help-footer" class="btn btn-primary">Compris !</button>
+                <button id="btn-close-help-footer" class="btn btn-primary">Fermer (Échap)</button>
             </div>
         </div>
     </div>

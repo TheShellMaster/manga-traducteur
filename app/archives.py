@@ -40,8 +40,13 @@ class ArchiveHandler:
 
     @staticmethod
     def detect_format(path: Path) -> str:
+        if not path.exists():
+            raise ValueError(f"Fichier introuvable : {path}")
         if path.is_dir():
             return "folder"
+        if path.stat().st_size == 0:
+            raise ValueError(f"Le fichier '{path.name}' est vide (0 octet).")
+
         suffix = path.suffix.lower()
         if suffix in (".cbz", ".zip"):
             return "cbz"
@@ -49,17 +54,20 @@ class ArchiveHandler:
             return "rar"
         if suffix in IMAGE_EXTENSIONS:
             return "image"
-        # Try checking magic bytes if extension is ambiguous
+
+        # Check magic bytes for ambiguous extensions
         try:
             with open(path, "rb") as f:
-                header = f.read(4)
+                header = f.read(16)
                 if header.startswith(b"PK\x03\x04"):
                     return "cbz"
                 if header.startswith(b"Rar!\x1a\x07"):
                     return "rar"
+                if header.startswith(b"\x89PNG\r\n\x1a\n") or header.startswith(b"\xff\xd8\xff") or header.startswith(b"RIFF") or header.startswith(b"BM"):
+                    return "image"
         except Exception:
             pass
-        raise ValueError(f"Format non supporté ou inconnu : {path}")
+        raise ValueError(f"Format non supporté ou fichier non reconnu : {path.name}")
 
     @staticmethod
     def extract(path: Path, work_dir: Path) -> Tuple[str, List[ArchiveItem]]:
@@ -91,28 +99,43 @@ class ArchiveHandler:
         if fmt == "cbz":
             cbz_extract_dir = work_dir / "cbz_extracted"
             cbz_extract_dir.mkdir(parents=True, exist_ok=True)
-            with zipfile.ZipFile(path, "r") as z:
-                names = sorted(z.namelist(), key=natural_sort_key)
-                for name in names:
-                    if name.endswith("/"):
-                        continue
-                    is_img = Path(name).suffix.lower() in IMAGE_EXTENSIONS
-                    safe_rel = Path(*[p for p in name.replace("\\", "/").split("/") if p not in ("", ".", "..")])
-                    dest_file = cbz_extract_dir / safe_rel
-                    dest_file.parent.mkdir(parents=True, exist_ok=True)
-                    with z.open(name) as src, open(dest_file, "wb") as dst:
-                        shutil.copyfileobj(src, dst)
-                    items.append(ArchiveItem(
-                        relative_name=name,
-                        is_image=is_img,
-                        source_path=dest_file,
-                    ))
+            resolved_work_dir = cbz_extract_dir.resolve()
+
+            try:
+                with zipfile.ZipFile(path, "r") as z:
+                    names = sorted(z.namelist(), key=natural_sort_key)
+                    for name in names:
+                        if name.endswith("/") or name.endswith("\\"):
+                            continue
+                        clean_parts = [p for p in name.replace("\\", "/").split("/") if p not in ("", ".")]
+                        if ".." in clean_parts:
+                            raise ValueError(f"Sécurité : Détection de Path Traversal (Zip-Slip) dans l'archive '{path.name}' : {name}")
+
+                        safe_rel = Path(*clean_parts)
+                        dest_file = (cbz_extract_dir / safe_rel).resolve()
+                        if not dest_file.is_relative_to(resolved_work_dir):
+                            raise ValueError(f"Sécurité : Détection d'évasion de répertoire (Zip-Slip) : {name}")
+
+                        dest_file.parent.mkdir(parents=True, exist_ok=True)
+                        with z.open(name) as src, open(dest_file, "wb") as dst:
+                            shutil.copyfileobj(src, dst)
+
+                        is_img = dest_file.suffix.lower() in IMAGE_EXTENSIONS
+                        items.append(ArchiveItem(
+                            relative_name=name,
+                            is_image=is_img,
+                            source_path=dest_file,
+                        ))
+            except zipfile.BadZipFile as e:
+                raise ValueError(f"L'archive '{path.name}' est corrompue ou n'est pas un fichier ZIP/CBZ valide.") from e
+
             return fmt, items
 
         if fmt == "rar":
             # Extract RAR using unrar utility to temporary directory
             rar_extract_dir = work_dir / "rar_extracted"
             rar_extract_dir.mkdir(parents=True, exist_ok=True)
+            resolved_rar_dir = rar_extract_dir.resolve()
             res = subprocess.run(
                 ["unrar", "x", "-y", "-inul", str(path), str(rar_extract_dir)],
                 stdout=subprocess.PIPE,
@@ -126,12 +149,14 @@ class ArchiveHandler:
                     stderr=subprocess.PIPE,
                 )
                 if res7.returncode != 0:
-                    raise RuntimeError(f"Échec de l'extraction de l'archive RAR {path}: {res.stderr.decode('utf-8', errors='ignore')}")
+                    raise ValueError(f"Échec de l'extraction de l'archive RAR '{path.name}' (fichier possiblement corrompu ou protégé par mot de passe).")
 
             for root, _, files in os.walk(rar_extract_dir):
                 rel_dir = Path(root).relative_to(rar_extract_dir)
                 for f in sorted(files, key=natural_sort_key):
-                    file_path = Path(root) / f
+                    file_path = (Path(root) / f).resolve()
+                    if not file_path.is_relative_to(resolved_rar_dir):
+                        raise ValueError(f"Sécurité : Détection de Path Traversal dans l'archive RAR : {file_path}")
                     rel_name = str((rel_dir / f).as_posix())
                     is_img = file_path.suffix.lower() in IMAGE_EXTENSIONS
                     items.append(ArchiveItem(

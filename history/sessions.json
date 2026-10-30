@@ -1,5 +1,23 @@
 [
   {
+    "session_id": "04a39319",
+    "filename": "mini.cbz",
+    "format": "cbz",
+    "total_pages": 2,
+    "date": "2026-10-30 02:57",
+    "model": "mock/vision-v1 (cache)",
+    "download_url": "/api/download/04a39319"
+  },
+  {
+    "session_id": "776f5437",
+    "filename": "mini.cbz",
+    "format": "cbz",
+    "total_pages": 2,
+    "date": "2026-10-30 02:54",
+    "model": "mock/vision-v1",
+    "download_url": "/api/download/776f5437"
+  },
+  {
     "session_id": "3a0f7272",
     "filename": "mini.cbz",
     "format": "cbz",

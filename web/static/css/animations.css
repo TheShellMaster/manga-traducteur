@@ -533,53 +533,176 @@ body.light-theme .slowmo-glyph {
 }
 
 /* --------------------------------------------------------------------------
-   5. Keycaps (<kbd>) & Keyboard Shortcut Styling
+   5. Keycaps (<kbd>) & Keyboard Shortcut Styling (Dark Glassmorphism Studio)
    -------------------------------------------------------------------------- */
-kbd {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 24px;
-    height: 24px;
-    padding: 0 7px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 11px;
-    font-weight: 700;
-    line-height: 1;
-    color: #e2e8f0;
-    background: #1e293b;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-bottom: 2px solid rgba(255, 255, 255, 0.22);
-    border-radius: 6px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-    vertical-align: middle;
+#help-modal .modal-content {
+    background: rgba(13, 19, 33, 0.96) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85),
+                0 0 40px rgba(99, 102, 241, 0.18) !important;
+    max-width: 720px !important;
+    width: 90vw !important;
+    max-height: 85vh !important;
+    overflow: hidden !important;
+    color: #f8fafc !important;
 }
 
-.shortcut-row {
+#help-modal .modal-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    padding: 18px 24px !important;
+    background: transparent !important;
+}
+
+#help-modal .modal-header h2 {
+    font-size: 17px !important;
+    font-weight: 700 !important;
+    color: #f8fafc !important;
+    letter-spacing: -0.01em !important;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#help-modal .modal-body {
+    padding: 20px 24px !important;
+    overflow-y: auto !important;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
+}
+
+#help-modal .section-title {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.1em !important;
+    color: #818cf8 !important;
+    margin-bottom: 10px !important;
+}
+
+#help-modal .shortcuts-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 18px;
+}
+
+#help-modal .shortcut-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
+    padding: 8px 14px;
     border-radius: 8px;
-    background: rgba(30, 41, 59, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    margin-bottom: 6px;
-    transition: background 0.15s ease;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.shortcut-row:hover {
-    background: rgba(30, 41, 59, 0.6);
+#help-modal .shortcut-row:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: rgba(99, 102, 241, 0.35) !important;
+    transform: translateX(2px);
 }
 
-.shortcut-keys {
+#help-modal .shortcut-desc {
+    color: #e2e8f0 !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+}
+
+#help-modal .shortcut-keys {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
 }
 
-.shortcut-desc {
-    font-size: 12.5px;
-    color: var(--text-secondary);
+/* Vraies Touches Mécaniques <kbd> Haute Définition */
+kbd,
+#help-modal kbd {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 28px !important;
+    height: 26px !important;
+    padding: 0 8px !important;
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important;
+    border: 1px solid #334155 !important;
+    border-bottom: 3px solid #1e293b !important;
+    border-radius: 6px !important;
+    color: #38bdf8 !important;
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, Menlo, Consolas, monospace !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5) !important;
+    text-shadow: 0 0 8px rgba(56, 189, 248, 0.4) !important;
+    vertical-align: middle;
+}
+
+/* Cartes de Fonctionnalités en Grille Sombre */
+#help-modal .help-cards-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 10px !important;
+}
+
+#help-modal .help-card {
+    display: flex !important;
+    gap: 10px !important;
+    padding: 12px !important;
+    border-radius: 10px !important;
+    background: rgba(30, 41, 59, 0.4) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    transition: border-color 0.2s ease;
+}
+
+#help-modal .help-card:hover {
+    border-color: rgba(99, 102, 241, 0.35) !important;
+}
+
+#help-modal .help-card-icon {
+    font-size: 20px !important;
+    flex-shrink: 0;
+}
+
+#help-modal .help-card-content strong {
+    color: #f1f5f9 !important;
+    font-weight: 600 !important;
+    font-size: 12px !important;
+    display: block;
+    margin-bottom: 3px;
+}
+
+#help-modal .help-card-content p {
+    color: #94a3b8 !important;
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+    margin: 0;
+}
+
+/* Bouton de Fermeture Élégant */
+#help-modal .modal-footer {
+    padding: 14px 24px !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    background: transparent !important;
+}
+
+#btn-close-help-footer {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+    color: #ffffff !important;
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    padding: 8px 24px !important;
+    box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4) !important;
+    border: none !important;
+    cursor: pointer !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+#btn-close-help-footer:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(79, 70, 229, 0.55) !important;
 }
 
 /* --------------------------------------------------------------------------

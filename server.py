@@ -1,9 +1,11 @@
 import asyncio
 import concurrent.futures
 import gc
+import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import tempfile
 import threading
@@ -31,7 +33,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Manga Translator Web Studio", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="Manga Translator Web Studio", version="2.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,11 +46,15 @@ app.add_middleware(
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "web" / "static"
 TEMPLATES_DIR = BASE_DIR / "web" / "templates"
-SESSIONS_DIR = Path("/tmp/manga_sessions")
-SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR = BASE_DIR / "data"
+SESSIONS_DIR = DATA_DIR / "sessions"
+OUTPUT_DIR = DATA_DIR / "output"
+CACHE_DIR = DATA_DIR / "cache"
+
+for d in (STATIC_DIR, TEMPLATES_DIR, DATA_DIR, SESSIONS_DIR, OUTPUT_DIR, CACHE_DIR):
+    d.mkdir(parents=True, exist_ok=True)
 
 # Mount static files
-STATIC_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # In-memory session tracking
@@ -90,6 +96,133 @@ def get_translation_history():
         return {"history": items}
     except Exception:
         return {"history": []}
+
+
+def _get_image_cache_key(img_bytes: bytes, tgt_lang: str) -> str:
+    h = hashlib.sha256(img_bytes).hexdigest()
+    return f"{h}_{tgt_lang.lower().strip()}"
+
+
+def _load_cached_page_blocks(img_bytes: bytes, tgt_lang: str) -> Optional[Tuple[List[Dict[str, Any]], str]]:
+    key = _get_image_cache_key(img_bytes, tgt_lang)
+    cache_file = CACHE_DIR / f"{key}.json"
+    if cache_file.exists():
+        try:
+            data = json.loads(cache_file.read_text(encoding="utf-8"))
+            blocks = data.get("blocks", [])
+            model = data.get("model", "Cache")
+            return blocks, f"{model} (cache)"
+        except Exception:
+            return None
+    return None
+
+
+def _save_cached_page_blocks(img_bytes: bytes, tgt_lang: str, blocks: List[Dict[str, Any]], model_name: str):
+    try:
+        key = _get_image_cache_key(img_bytes, tgt_lang)
+        cache_file = CACHE_DIR / f"{key}.json"
+        data = {
+            "key": key,
+            "tgt_lang": tgt_lang,
+            "model": model_name,
+            "timestamp": time.time(),
+            "blocks": blocks,
+        }
+        cache_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        print("[Cache] Erreur écriture cache:", e)
+
+
+@app.get("/api/library")
+def get_library():
+    """
+    Returns the permanent catalog of translated mangas stored in data/output/
+    with metadata, file size in MB, date, and download link.
+    """
+    items = []
+    if OUTPUT_DIR.exists():
+        for p in sorted(OUTPUT_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+            if p.is_file() and p.suffix.lower() in (".cbz", ".cbr", ".zip", ".jpg", ".png", ".webp"):
+                stat = p.stat()
+                size_mb = round(stat.st_size / (1024 * 1024), 2)
+                mtime_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(stat.st_mtime))
+                items.append({
+                    "filename": p.name,
+                    "format": p.suffix.lower().lstrip("."),
+                    "size_mb": size_mb,
+                    "date": mtime_str,
+                    "download_url": f"/api/library/download/{p.name}",
+                })
+    return {"library": items, "count": len(items)}
+
+
+@app.get("/api/library/download/{filename}")
+def download_from_library(filename: str):
+    """Safely serves a translated archive from data/output with path-traversal prevention."""
+    safe_name = Path(filename).name
+    target_file = (OUTPUT_DIR / safe_name).resolve()
+    if not target_file.is_relative_to(OUTPUT_DIR.resolve()) or not target_file.exists():
+        raise HTTPException(status_code=404, detail="Manga introuvable dans la bibliothèque permanente.")
+    return FileResponse(target_file, filename=safe_name, media_type="application/octet-stream")
+
+
+@app.get("/api/system/check_update")
+async def check_system_update():
+    """
+    Compares the local git commit hash with the remote repository on GitHub (TheShellMaster/manga-traducteur).
+    """
+    import subprocess
+    import httpx
+
+    current_commit = "unknown"
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=str(BASE_DIR),
+        )
+        if res.returncode == 0:
+            current_commit = res.stdout.strip()
+    except Exception:
+        pass
+
+    latest_commit = current_commit
+    up_to_date = True
+    remote_repo = "TheShellMaster/manga-traducteur"
+
+    try:
+        res_git = subprocess.run(
+            ["git", "ls-remote", "--heads", "origin", "main"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=str(BASE_DIR),
+            timeout=3,
+        )
+        if res_git.returncode == 0 and res_git.stdout:
+            remote_full = res_git.stdout.split()[0].strip()
+            latest_commit = remote_full[:7]
+            up_to_date = (current_commit == latest_commit)
+    except Exception:
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                r = await client.get(f"https://api.github.com/repos/{remote_repo}/commits/main")
+                if r.status_code == 200:
+                    latest_commit = r.json().get("sha", "")[:7]
+                    up_to_date = (current_commit == latest_commit)
+        except Exception:
+            pass
+
+    return {
+        "status": "ok",
+        "current_commit": current_commit,
+        "latest_commit": latest_commit,
+        "up_to_date": up_to_date,
+        "version": "2.1.0",
+        "remote_repo": remote_repo,
+    }
 
 
 @app.get("/api/session/{session_id}")
@@ -348,6 +481,9 @@ def _init_session_from_path(session_id: str, session_dir: Path, input_path: Path
 
 @app.post("/api/upload")
 async def upload_manga(file: UploadFile = File(...)):
+    if file.size is not None and file.size == 0:
+        raise HTTPException(status_code=400, detail="Le fichier téléversé est vide (0 octet).")
+
     session_id = str(uuid.uuid4())[:8]
     session_dir = SESSIONS_DIR / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
@@ -357,10 +493,17 @@ async def upload_manga(file: UploadFile = File(...)):
     with open(input_file, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    if input_file.stat().st_size == 0:
+        shutil.rmtree(session_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail="Le fichier téléversé est vide (0 octet).")
+
     try:
         return _init_session_from_path(session_id, session_dir, input_file, safe_name)
     except HTTPException:
         raise
+    except ValueError as ve:
+        shutil.rmtree(session_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         shutil.rmtree(session_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"Erreur d'extraction : {str(e)}")
@@ -379,7 +522,7 @@ async def upload_folder(files: List[UploadFile] = File(...)):
     parts = [p for p in first_raw.split("/") if p and p not in (".", "..")]
     folder_name = parts[0] if len(parts) > 1 else "dossier_manga"
 
-    input_folder = session_dir / folder_name
+    input_folder = (session_dir / folder_name).resolve()
     input_folder.mkdir(parents=True, exist_ok=True)
 
     for f in files:
@@ -391,7 +534,10 @@ async def upload_folder(files: List[UploadFile] = File(...)):
             rel_path = Path(*rel_parts[1:])
         else:
             rel_path = Path(*rel_parts)
-        dest = input_folder / rel_path
+        dest = (input_folder / rel_path).resolve()
+        if not dest.is_relative_to(input_folder):
+            shutil.rmtree(session_dir, ignore_errors=True)
+            raise HTTPException(status_code=400, detail=f"Sécurité : Détection d'évasion de chemin : {raw_name}")
         dest.parent.mkdir(parents=True, exist_ok=True)
         with open(dest, "wb") as buffer:
             shutil.copyfileobj(f.file, buffer)
@@ -400,6 +546,9 @@ async def upload_folder(files: List[UploadFile] = File(...)):
         return _init_session_from_path(session_id, session_dir, input_folder, folder_name)
     except HTTPException:
         raise
+    except ValueError as ve:
+        shutil.rmtree(session_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         shutil.rmtree(session_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"Erreur d'extraction du dossier : {str(e)}")
@@ -439,17 +588,39 @@ def _translate_single_page(
 
     session["pages"][idx]["status"] = "processing"
     img = item.get_image()
+
+    raw_img_bytes = None
+    if item.raw_bytes:
+        raw_img_bytes = item.raw_bytes
+    elif item.source_path and item.source_path.exists():
+        try:
+            raw_img_bytes = item.source_path.read_bytes()
+        except Exception:
+            raw_img_bytes = None
+    if not raw_img_bytes:
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=90)
+        raw_img_bytes = buf.getvalue()
+
     try:
-        blocks, model_name = client.detect_and_translate(
-            img,
-            max_side=1600,
-            context_history=context_history,
-        )
-        refine_translations_with_groq(
-            blocks,
-            target_lang=tgt_lang,
-            context_history=context_history,
-        )
+        cached = _load_cached_page_blocks(raw_img_bytes, tgt_lang)
+        if cached is not None:
+            blocks, model_name = cached
+            is_cached = True
+        else:
+            is_cached = False
+            blocks, model_name = client.detect_and_translate(
+                img,
+                max_side=1600,
+                context_history=context_history,
+            )
+            refine_translations_with_groq(
+                blocks,
+                target_lang=tgt_lang,
+                context_history=context_history,
+            )
+            _save_cached_page_blocks(raw_img_bytes, tgt_lang, blocks, model_name)
+
         rendered = render_manga_page(
             img=img,
             blocks=blocks,
@@ -469,7 +640,7 @@ def _translate_single_page(
         session["pages"][idx]["status"] = "done"
         session["pages"][idx]["blocks_count"] = len(ser_blocks)
         session["pages"][idx]["blocks"] = ser_blocks
-        session["current_log"] = f"Page {idx + 1}/{total} terminée ({len(ser_blocks)} bulles via {model_name})"
+        session["current_log"] = f"Page {idx + 1}/{total} terminée ({len(ser_blocks)} bulles via {model_name}{' ⚡cache' if is_cached else ''})"
         gc.collect()
         return {"status": "done", "blocks_count": len(ser_blocks), "blocks": ser_blocks, "model": model_name}
     except Exception as e:
@@ -600,6 +771,27 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
     session["status"] = "finished"
     session["progress_percent"] = 100
     session["current_log"] = f"Traduction terminée avec succès via {last_model} !"
+
+    # Automatically save translated archive into permanent data/output/
+    try:
+        input_file = Path(session["input_file"])
+        fmt = session["fmt"]
+        safe_stem = re.sub(r"[^a-zA-Z0-9_\-\.]", "_", input_file.stem)
+        ext = ".cbz" if fmt in ("folder", "cbz") else input_file.suffix
+        final_filename = f"{safe_stem}_fr_{session_id}{ext}"
+        permanent_out_path = OUTPUT_DIR / final_filename
+        ArchiveHandler.pack(
+            fmt="cbz" if fmt == "folder" else fmt,
+            input_path=input_file,
+            output_path=permanent_out_path,
+            items=session["items"],
+            rendered_images=session["translated_images"],
+        )
+        session["permanent_file"] = str(permanent_out_path)
+        session["permanent_filename"] = final_filename
+    except Exception as exc:
+        print("[Library] Erreur auto-archivage permanent:", exc)
+
     _record_session_history(session, model_name=last_model)
 
 
@@ -793,6 +985,11 @@ def download_translated_manga(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
 
+    perm_file = session.get("permanent_file")
+    if perm_file and Path(perm_file).exists():
+        perm_path = Path(perm_file)
+        return FileResponse(perm_path, filename=perm_path.name, media_type="application/octet-stream")
+
     session_dir = Path(session["session_dir"])
     input_file = Path(session["input_file"])
     fmt = session["fmt"]
@@ -817,5 +1014,13 @@ def download_translated_manga(session_id: str):
             items=session["items"],
             rendered_images=session["translated_images"],
         )
+
+    # Also preserve in permanent OUTPUT_DIR
+    try:
+        perm_dest = OUTPUT_DIR / f"{Path(out_name).stem}_{session_id}{Path(out_name).suffix}"
+        if not perm_dest.exists():
+            shutil.copy2(out_path, perm_dest)
+    except Exception:
+        pass
 
     return FileResponse(out_path, filename=out_name, media_type="application/octet-stream")
