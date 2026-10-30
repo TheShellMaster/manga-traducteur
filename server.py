@@ -133,6 +133,17 @@ def _save_cached_page_blocks(img_bytes: bytes, tgt_lang: str, blocks: List[Dict[
         print("[Cache] Erreur écriture cache:", e)
 
 
+def _invalidate_cached_page_blocks(img_bytes: bytes, tgt_lang: str):
+    """Invalidates disk cache for a specific page image and target language."""
+    try:
+        key = _get_image_cache_key(img_bytes, tgt_lang)
+        cache_file = CACHE_DIR / f"{key}.json"
+        if cache_file.exists():
+            cache_file.unlink()
+    except Exception as e:
+        print("[Cache] Erreur invalidation cache:", e)
+
+
 @app.get("/api/library")
 def get_library():
     """
@@ -532,6 +543,8 @@ def _init_session_from_path(session_id: str, session_dir: Path, input_path: Path
     extract_dir = session_dir / "extracted"
     extract_dir.mkdir(parents=True, exist_ok=True)
     fmt, items = ArchiveHandler.extract(input_path, extract_dir)
+    # Secondary defense: ensure all items exclude macOS AppleDouble, resource forks, and junk
+    items = [it for it in items if not ArchiveHandler.is_ignored_entry(it.relative_name)]
     image_items = [it for it in items if it.is_image]
 
     if not image_items:
@@ -542,14 +555,19 @@ def _init_session_from_path(session_id: str, session_dir: Path, input_path: Path
     pages_dir = session_dir / "pages"
     pages_dir.mkdir(parents=True, exist_ok=True)
 
-    for idx, it in enumerate(image_items):
-        img = it.get_image()
-        orig_name = f"page_{idx:03d}_orig.jpg"
+    valid_image_items = []
+    for it in image_items:
+        try:
+            img = it.get_image()
+        except Exception:
+            # Skip unidentifiable or corrupt entries without HTTP 500
+            continue
+        orig_name = f"page_{len(pages_info):03d}_orig.jpg"
         w, h = img.width, img.height
         img.convert("RGB").save(pages_dir / orig_name, format="JPEG", quality=85)
         img.close()
         pages_info.append({
-            "index": idx,
+            "index": len(pages_info),
             "relative_name": it.relative_name,
             "status": "pending",
             "width": w,
@@ -557,6 +575,12 @@ def _init_session_from_path(session_id: str, session_dir: Path, input_path: Path
             "blocks_count": 0,
             "blocks": [],
         })
+        valid_image_items.append(it)
+    image_items = valid_image_items
+
+    if not image_items:
+        shutil.rmtree(session_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail="Aucune image valide trouvée dans le fichier ou dossier fourni.")
     gc.collect()
 
     sessions[session_id] = {
@@ -686,6 +710,8 @@ def _translate_single_page(
     text_color: str,
     mask_style: str,
     context_history: Optional[List[Dict[str, str]]] = None,
+    force_refresh: bool = False,
+    options: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     session_dir = Path(session["session_dir"])
     pages_dir = session_dir / "pages"
@@ -713,7 +739,12 @@ def _translate_single_page(
         raw_img_bytes = buf.getvalue()
 
     try:
-        cached = _load_cached_page_blocks(raw_img_bytes, tgt_lang)
+        if force_refresh:
+            _invalidate_cached_page_blocks(raw_img_bytes, tgt_lang)
+            cached = None
+        else:
+            cached = _load_cached_page_blocks(raw_img_bytes, tgt_lang)
+
         if cached is not None:
             blocks, model_name = cached
             is_cached = True
@@ -724,11 +755,14 @@ def _translate_single_page(
                 max_side=1600,
                 context_history=context_history,
             )
-            refine_translations_with_groq(
-                blocks,
-                target_lang=tgt_lang,
-                context_history=context_history,
-            )
+            opts = options or {}
+            if opts.get("groq_refine") or opts.get("groq_api_key") or opts.get("provider") == "groq":
+                refine_translations_with_groq(
+                    blocks,
+                    groq_api_key=opts.get("groq_api_key"),
+                    target_lang=tgt_lang,
+                    context_history=context_history,
+                )
             _save_cached_page_blocks(raw_img_bytes, tgt_lang, blocks, model_name)
 
         # Live view: expose detected bubbles, then the cleaned page, before final typesetting
@@ -817,8 +851,10 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
     limit = int(max_pages) if (max_pages is not None and int(max_pages) > 0) else len(image_items)
     total = min(len(image_items), limit)
 
-    # Inter-page context memory: last 8 translated lines across previous pages
+    # Inter-page context memory: sequential, ordered dialogue across pages
     context_history: List[Dict[str, str]] = []
+    page_contexts: Dict[int, List[Dict[str, str]]] = {}
+    page_events: Dict[int, threading.Event] = {i: threading.Event() for i in range(total)}
     context_lock = threading.Lock()
     last_model = "Cloud Vision"
     completed_count = 0
@@ -840,6 +876,13 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
         if session["pages"][page_idx].get("status") == "done" and trans_file.exists():
             item = session["image_items"][page_idx]
             session["translated_images"][item.relative_name] = trans_file
+            with context_lock:
+                page_contexts[page_idx] = [
+                    {"original": b.get("original", ""), "translation": b.get("translation", "")}
+                    for b in session["pages"][page_idx].get("blocks", [])
+                    if b.get("original") or b.get("translation")
+                ]
+            page_events[page_idx].set()
             return page_idx, {
                 "status": "done",
                 "blocks_count": session["pages"][page_idx].get("blocks_count", 0),
@@ -847,29 +890,46 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
                 "model": "Resumed (cache disque)",
             }
 
-        with context_lock:
-            ctx_snapshot = list(context_history[-8:])
-        res = _translate_single_page(
-            session=session,
-            idx=page_idx,
-            client=client,
-            tgt_lang=tgt_lang,
-            font_style=font_style,
-            fixed_font_size=fixed_font_size,
-            text_color=text_color,
-            mask_style=mask_style,
-            context_history=ctx_snapshot,
-        )
-        with context_lock:
-            for b in res.get("blocks", []):
-                if b.get("original") or b.get("translation"):
-                    context_history.append({
-                        "original": b.get("original", ""),
-                        "translation": b.get("translation", ""),
-                    })
-            if len(context_history) > 12:
-                context_history[:] = context_history[-12:]
-        return page_idx, res
+        try:
+            # Wait for preceding page context if page_idx > 0 to maintain natural narrative order
+            if page_idx > 0 and not session.get("cancelled"):
+                page_events[page_idx - 1].wait(timeout=5.0)
+
+            with context_lock:
+                ctx_ordered: List[Dict[str, str]] = []
+                for i in range(page_idx):
+                    if i in page_contexts:
+                        ctx_ordered.extend(page_contexts[i])
+                ctx_snapshot = list(ctx_ordered[-8:])
+
+            res = _translate_single_page(
+                session=session,
+                idx=page_idx,
+                client=client,
+                tgt_lang=tgt_lang,
+                font_style=font_style,
+                fixed_font_size=fixed_font_size,
+                text_color=text_color,
+                mask_style=mask_style,
+                context_history=ctx_snapshot,
+                options=options,
+            )
+
+            with context_lock:
+                page_contexts[page_idx] = [
+                    {"original": b.get("original", ""), "translation": b.get("translation", "")}
+                    for b in res.get("blocks", [])
+                    if b.get("original") or b.get("translation")
+                ]
+                full_ordered: List[Dict[str, str]] = []
+                for i in range(total):
+                    if i in page_contexts:
+                        full_ordered.extend(page_contexts[i])
+                context_history[:] = full_ordered[-12:]
+
+            return page_idx, res
+        finally:
+            page_events[page_idx].set()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
         futures = {executor.submit(_worker_task, p_idx): p_idx for p_idx in range(total)}
@@ -891,15 +951,6 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
                 if res.get("status") == "done":
                     last_model = res.get("model", "Cloud Vision")
                     last_blocks = res.get("blocks", [])
-                    with context_lock:
-                        for b in last_blocks:
-                            if b.get("original") or b.get("translation"):
-                                context_history.append({
-                                    "original": b.get("original", ""),
-                                    "translation": b.get("translation", ""),
-                                })
-                        if len(context_history) > 12:
-                            context_history = context_history[-12:]
 
                     if last_blocks:
                         sample_b = last_blocks[0]
@@ -1008,7 +1059,33 @@ def retranslate_single_page(session_id: str, page_idx: int, data: Optional[Dict[
         fixed_font_size=fixed_font_size,
         text_color=text_color,
         mask_style=mask_style,
+        force_refresh=True,
+        options=opts,
     )
+
+    errors_count = sum(1 for p in session["pages"] if p.get("status") == "error")
+    session["errors_count"] = errors_count
+    if errors_count == 0:
+        session["status"] = "finished"
+        try:
+            input_file = Path(session["input_file"])
+            fmt = session["fmt"]
+            safe_stem = re.sub(r"[^a-zA-Z0-9_\-\.]", "_", input_file.stem)
+            ext = ".cbz" if fmt in ("folder", "cbz") else input_file.suffix
+            final_filename = f"{safe_stem}_fr_{session_id}{ext}"
+            permanent_out_path = OUTPUT_DIR / final_filename
+            ArchiveHandler.pack(
+                fmt="cbz" if fmt == "folder" else fmt,
+                input_path=input_file,
+                output_path=permanent_out_path,
+                items=session["items"],
+                rendered_images=session["translated_images"],
+            )
+            session["permanent_file"] = str(permanent_out_path)
+            session["permanent_filename"] = final_filename
+        except Exception as exc:
+            print("[Library] Erreur auto-archivage permanent lors du retranslate:", exc)
+
     return {"session_id": session_id, "page_idx": page_idx, **res}
 
 

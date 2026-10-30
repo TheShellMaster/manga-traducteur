@@ -39,6 +39,26 @@ class ArchiveHandler:
     """Handles universal reading and writing of Manga archives (CBZ, CBR, RAR, Folder, Image)."""
 
     @staticmethod
+    def is_ignored_entry(entry_name_or_path: Any) -> bool:
+        """
+        Check if an entry is a macOS metadata, AppleDouble (._*), __MACOSX/ directory,
+        or other OS junk (.DS_Store, Thumbs.db).
+        """
+        if isinstance(entry_name_or_path, Path):
+            p_parts = [p for p in entry_name_or_path.parts if p not in ("", ".")]
+            name = entry_name_or_path.name
+        else:
+            norm = str(entry_name_or_path).replace("\\", "/")
+            p_parts = [p for p in norm.split("/") if p not in ("", ".")]
+            name = p_parts[-1] if p_parts else ""
+
+        if any(part.lower() == "__macosx" or part.startswith("._") for part in p_parts):
+            return True
+        if name.startswith("._") or name in (".DS_Store", "Thumbs.db"):
+            return True
+        return False
+
+    @staticmethod
     def detect_format(path: Path) -> str:
         if not path.exists():
             raise ValueError(f"Fichier introuvable : {path}")
@@ -46,6 +66,8 @@ class ArchiveHandler:
             return "folder"
         if path.stat().st_size == 0:
             raise ValueError(f"Le fichier '{path.name}' est vide (0 octet).")
+        if ArchiveHandler.is_ignored_entry(path):
+            raise ValueError(f"Fichier système macOS/OS ignoré : {path.name}")
 
         suffix = path.suffix.lower()
         if suffix in (".cbz", ".zip"):
@@ -88,6 +110,10 @@ class ArchiveHandler:
                 for f in sorted(files, key=natural_sort_key):
                     file_path = Path(root) / f
                     rel_name = str((rel_dir / f).as_posix())
+                    if rel_name.startswith("./"):
+                        rel_name = rel_name[2:]
+                    if ArchiveHandler.is_ignored_entry(rel_name) or ArchiveHandler.is_ignored_entry(file_path):
+                        continue
                     is_img = file_path.suffix.lower() in IMAGE_EXTENSIONS
                     items.append(ArchiveItem(
                         relative_name=rel_name,
@@ -106,6 +132,8 @@ class ArchiveHandler:
                     names = sorted(z.namelist(), key=natural_sort_key)
                     for name in names:
                         if name.endswith("/") or name.endswith("\\"):
+                            continue
+                        if ArchiveHandler.is_ignored_entry(name):
                             continue
                         clean_parts = [p for p in name.replace("\\", "/").split("/") if p not in ("", ".")]
                         if ".." in clean_parts:
@@ -158,6 +186,10 @@ class ArchiveHandler:
                     if not file_path.is_relative_to(resolved_rar_dir):
                         raise ValueError(f"Sécurité : Détection de Path Traversal dans l'archive RAR : {file_path}")
                     rel_name = str((rel_dir / f).as_posix())
+                    if rel_name.startswith("./"):
+                        rel_name = rel_name[2:]
+                    if ArchiveHandler.is_ignored_entry(rel_name) or ArchiveHandler.is_ignored_entry(file_path):
+                        continue
                     is_img = file_path.suffix.lower() in IMAGE_EXTENSIONS
                     items.append(ArchiveItem(
                         relative_name=rel_name,

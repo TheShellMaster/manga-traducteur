@@ -36,8 +36,6 @@ def _load_env_file(path: Path):
         clean_val = val.strip().strip('"').strip("'")
         if clean_val:
             os.environ[key] = clean_val
-        else:
-            os.environ.pop(key, None)
 
 
 def load_env():

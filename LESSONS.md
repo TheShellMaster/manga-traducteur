@@ -84,3 +84,23 @@ Ce fichier consigne les erreurs rencontrées, leur cause racine et la règle pr�
   2. Ajout du bouton de bascule clair/sombre (`#btn-theme`) avec mémorisation dans `localStorage`.
   3. Nettoyage de toutes les valeurs de contraste pour garantir une lisibilité parfaite sans texte grisâtre sur fond clair.
 
+---
+
+## 11. Conservation des Variables d'Environnement Système dans `_load_env_file` (`app/config.py`)
+- **Symptôme** : Instancier `CloudVisionClient()` purgeait les variables d'environnement système (telles que `NVIDIA_API_KEY`) si `.env` contenait une entrée vide `NVIDIA_API_KEY=`.
+- **Cause racine** : `_load_env_file` exécutait `os.environ.pop(key, None)` dès que `clean_val` était vide.
+- **Correctif & Règle** : Si une valeur est vide dans `.env`, ne pas supprimer la clé de `os.environ` afin de préserver les variables d'environnement injectées par le système hôte, Docker ou CI.
+
+---
+
+## 12. Recalcul d'État et d'Archive lors du Retranslate Unitaire (`server.py`)
+- **Symptôme** : Après avoir ré-exécuté avec succès la traduction d'une page en erreur (`/api/translate/page/{session_id}/{page_idx}`), le compteur `errors_count` restait figé et le statut général ne repassait pas à `finished`.
+- **Cause racine** : `retranslate_single_page` appelait `_translate_single_page` sans recalculer le cumul d'erreurs ni ré-archiver le document final.
+- **Correctif & Règle** : Recalculer `session["errors_count"] = sum(1 for p in session["pages"] if p.get("status") == "error")` et passer `session["status"] = "finished"` avec régénération de `permanent_file` lorsque le compte d'erreurs atteint 0.
+
+---
+
+## 13. Nettoyage Préalable des Séquences ANSI dans `parse_and_validate_blocks` (`app/cloud_vision.py`)
+- **Symptôme** : Échec du décodage `json.loads` lorsque le LLM renvoie des séquences d'échappement terminal ANSI (`\x1b[...]`) autour ou à l'intérieur du JSON.
+- **Cause racine** : Le nettoyage ANSI n'était effectué que sur les champs texte `orig` et `trans` après le parsing JSON.
+- **Correctif & Règle** : Appliquer `re.sub(r"(?:\x1b|\\u001b)\[[0-9;]*[a-zA-Z]", "", raw)` directement sur le texte brut avant l'appel à `json.loads`.

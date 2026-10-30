@@ -566,7 +566,6 @@ class TestTier2BoundaryAndFaultIsolation:
         rendered.close()
         test_img.close()
 
-    @pytest.mark.xfail(strict=False, reason="Bug E1: ArchiveHandler.extract does not filter macOS __MACOSX/ AppleDouble files yet (Milestone M2)")
     def test_tier2_macos_apple_double_archive_handling(self, tmp_path):
         """
         R2 (Bug E1): macOS archive resilience.
@@ -645,7 +644,6 @@ class TestTier3CrossFeaturePipelines:
         assert "Léon" in prompt
         assert "Bonjour" in prompt
 
-    @pytest.mark.xfail(strict=False, reason="Bug E3: Inter-page context propagation race condition in ThreadPoolExecutor (Milestone M2)")
     def test_tier3_interpage_context_propagation_ordering(self, tmp_path):
         """
         Verifies that dialogue translated in earlier pages is accumulated in

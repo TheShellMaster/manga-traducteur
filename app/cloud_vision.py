@@ -167,10 +167,13 @@ def parse_and_validate_blocks(raw_text: str) -> List[Dict[str, Any]]:
     Auto-corrects when a model outputs [xmin, ymin, xmax, ymax] inside x,y,w,h (where x + w > 1000).
     """
     raw = (raw_text or "").strip()
+    # Strip ANSI escape sequences from raw string before parsing JSON
+    raw = re.sub(r"(?:\x1b|\\u001b)\[[0-9;]*[a-zA-Z]", "", raw)
     raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
     m = re.search(r"```(?:json)?\s*(.*?)```", raw, re.DOTALL)
     if m:
         raw = m.group(1).strip()
+    raw = re.sub(r"(?:\x1b|\\u001b)\[[0-9;]*[a-zA-Z]", "", raw)
 
     # Pre-clean raw string to remove invalid unescaped control characters before parsing JSON
     cleaned_raw = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", raw)
