@@ -1,0 +1,16 @@
+services:
+  manga-translator:
+    build: .
+    container_name: manga-translator
+    env_file:
+      - .env
+    volumes:
+      - ./input:/app/input
+      - ./output:/app/output
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+        reservations:
+          memory: 256M

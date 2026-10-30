@@ -68,15 +68,57 @@
                 <input type="file" id="file-input" accept=".cbz,.cbr,.rar,.zip,.png,.jpg,.jpeg,.webp" class="file-input-hidden">
                 <input type="file" id="folder-input" webkitdirectory directory multiple class="file-input-hidden">
                 <div class="drop-illustration">
-                    <!-- Concrete 3D Animated Manga Book with Flipping Pages -->
-                    <div class="manga-book-3d" id="manga-book-3d" aria-hidden="true">
-                        <div class="book-cover book-cover-back"></div>
-                        <div class="book-page book-page-3"></div>
-                        <div class="book-page book-page-2"></div>
-                        <div class="book-page book-page-1"></div>
-                        <div class="book-cover book-cover-front">
-                            <span class="book-kanji">漫</span>
+                    <!-- Le Portail Holographique de Scanlation (Planche Manga Avant / Après interactive) -->
+                    <div class="manga-portal-hero" id="manga-portal-hero" aria-hidden="true">
+                        <!-- Bandeau promotionnel japonais (Obi) -->
+                        <div class="portal-obi">
+                            <span class="obi-badge">帯 OFFICIAL SCANLATION</span>
+                            <span class="obi-text">100% Cloud Vision • AI Translation</span>
                         </div>
+
+                        <!-- Double Planche Manga Interactive -->
+                        <div class="portal-page-frame" id="portal-page-frame">
+                            <!-- Côté Gauche : Planche Originale Japonaise -->
+                            <div class="portal-side portal-side-original">
+                                <div class="manga-panel panel-top">
+                                    <div class="manga-screentone"></div>
+                                    <div class="manga-bubble bubble-ja">
+                                        <span>「まさか…！？」</span>
+                                    </div>
+                                </div>
+                                <div class="manga-panel panel-bottom">
+                                    <span class="manga-sfx-ink">ドドド</span>
+                                    <div class="manga-bubble bubble-narration-ja">
+                                        <span>これが…AIの力か…！</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Côté Droit : Planche Traduite en Français (Révélée par la Lame Laser) -->
+                            <div class="portal-side portal-side-translated" id="portal-side-translated">
+                                <div class="manga-panel panel-top">
+                                    <div class="manga-bubble bubble-fr">
+                                        <span>« Impossible… !? »</span>
+                                    </div>
+                                </div>
+                                <div class="manga-panel panel-bottom">
+                                    <span class="manga-sfx-glow">⚡ VROOOM</span>
+                                    <div class="manga-bubble bubble-narration-fr">
+                                        <span>Est-ce donc… le pouvoir de l'IA !?</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Lame Laser Cyber-Scan Séparatrice -->
+                            <div class="portal-laser-blade" id="portal-laser-blade">
+                                <div class="laser-handle-glow"></div>
+                                <div class="laser-flare-center"></div>
+                            </div>
+                        </div>
+
+                        <!-- Onomatopées Énergétiques Flottantes -->
+                        <div class="portal-floating-sfx sfx-left" id="portal-sfx-left">ゴゴゴ</div>
+                        <div class="portal-floating-sfx sfx-right" id="portal-sfx-right">ドドド</div>
                     </div>
                 </div>
                 <h2>Glissez-déposez votre Manga ici</h2>
