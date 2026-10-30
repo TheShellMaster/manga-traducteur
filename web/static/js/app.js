@@ -108,19 +108,19 @@ function updateDownloadButtonLabel(fmt) {
     }
 }
 
+let providerPresets = {};
+
 function getProviderOptionsPayload() {
     const provider = document.getElementById('cfg-provider').value;
-    let apiKey = '';
-    if (provider === 'gemini') {
-        apiKey = document.getElementById('cfg-gemini-key').value.trim();
-    } else if (provider === 'openrouter') {
-        apiKey = document.getElementById('cfg-openrouter-key').value.trim();
-    } else if (provider === 'custom') {
-        apiKey = document.getElementById('cfg-custom-api-key').value.trim();
+    const apiKey = document.getElementById('cfg-api-key').value.trim();
+    const baseUrl = document.getElementById('cfg-base-url').value.trim();
+
+    const modelSelect = document.getElementById('cfg-model-select');
+    let model = modelSelect ? modelSelect.value : '';
+    if (model === '__custom__') {
+        const customInput = document.getElementById('cfg-model-custom');
+        model = customInput ? customInput.value.trim() : '';
     }
-    // Only send base_url and model if provider === 'custom'
-    const baseUrl = provider === 'custom' ? document.getElementById('cfg-custom-base-url').value.trim() : '';
-    const model = provider === 'custom' ? document.getElementById('cfg-custom-model').value.trim() : '';
 
     return {
         provider,
@@ -141,6 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initDragAndDrop();
     initSettings();
+    initHistory();
     initNavigation();
     initViewModes();
     initSliderCompare();
@@ -870,6 +871,12 @@ function startPolling() {
             progressFill.style.width = `${data.progress_percent}%`;
             progressLog.textContent = data.current_log;
 
+            const liveFeedEl = document.getElementById('progress-live-feed');
+            if (liveFeedEl && data.last_bubble) {
+                const lb = data.last_bubble;
+                liveFeedEl.textContent = `⚡ [Page ${lb.page}] « ${lb.original} » ➜ « ${lb.translation} » (${lb.model})`;
+            }
+
             let doneCount = 0;
             let errCount = 0;
 
@@ -941,7 +948,7 @@ function updateApiStatusPills(d) {
     setPill('pill-groq', 'Groq', Boolean(d.groq_api_key && d.groq_api_key.trim()));
 }
 
-// Settings modal logic
+// Settings modal logic with Universal Provider & Model selection
 function initSettings() {
     btnOpenSettings.addEventListener('click', async () => {
         await fetchSettings();
@@ -961,35 +968,129 @@ function initSettings() {
         });
     });
 
-    // Provider visibility toggle
     const cfgProvider = document.getElementById('cfg-provider');
-    function updateProviderBoxes() {
-        const v = cfgProvider.value;
-        const boxGemini = document.getElementById('box-gemini');
-        const boxOpenRouter = document.getElementById('box-openrouter');
-        const boxCustom = document.getElementById('box-custom');
-        if (boxGemini) boxGemini.style.display = (v === 'auto' || v === 'gemini') ? 'block' : 'none';
-        if (boxOpenRouter) boxOpenRouter.style.display = (v === 'auto' || v === 'openrouter') ? 'block' : 'none';
-        if (boxCustom) boxCustom.style.display = (v === 'custom') ? 'block' : 'none';
+    const cfgBaseUrl = document.getElementById('cfg-base-url');
+    const cfgApiKey = document.getElementById('cfg-api-key');
+    const lblApiKey = document.getElementById('lbl-api-key');
+    const cfgModelSelect = document.getElementById('cfg-model-select');
+    const cfgModelCustom = document.getElementById('cfg-model-custom');
+
+    let fetchModelsTimeout = null;
+
+    async function loadModelsFromProvider(selectedModel = '') {
+        const prov = cfgProvider.value;
+        const key = cfgApiKey ? cfgApiKey.value.trim() : '';
+        const base = cfgBaseUrl ? cfgBaseUrl.value.trim() : '';
+
+        if (cfgModelSelect) {
+            cfgModelSelect.innerHTML = '<option value="">⏳ Découverte des modèles en direct depuis l\'API...</option>';
+        }
+
+        try {
+            const res = await fetch('/api/models/fetch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider: prov, api_key: key, base_url: base }),
+            });
+            const data = await res.json();
+            const models = data.models || [];
+
+            if (cfgModelSelect) {
+                cfgModelSelect.innerHTML = '';
+                models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.label || m.id;
+                    cfgModelSelect.appendChild(opt);
+                });
+
+                const optCustom = document.createElement('option');
+                optCustom.value = '__custom__';
+                optCustom.textContent = '✍️ Nom de modèle personnalisé...';
+                cfgModelSelect.appendChild(optCustom);
+
+                if (selectedModel && models.some(m => m.id === selectedModel)) {
+                    cfgModelSelect.value = selectedModel;
+                    if (cfgModelCustom) cfgModelCustom.classList.add('hidden');
+                } else if (selectedModel) {
+                    cfgModelSelect.value = '__custom__';
+                    if (cfgModelCustom) {
+                        cfgModelCustom.value = selectedModel;
+                        cfgModelCustom.classList.remove('hidden');
+                    }
+                } else if (models.length > 0) {
+                    cfgModelSelect.value = models[0].id;
+                    if (cfgModelCustom) cfgModelCustom.classList.add('hidden');
+                }
+            }
+        } catch (err) {
+            console.error("Erreur découverte modèles:", err);
+            onProviderChange(selectedModel);
+        }
     }
-    cfgProvider.addEventListener('change', updateProviderBoxes);
-    updateProviderBoxes();
+
+    function onProviderChange(selectedModel = '') {
+        const prov = cfgProvider.value;
+        const preset = providerPresets[prov] || {};
+
+        if (lblApiKey) {
+            lblApiKey.textContent = `Clé d'API ${preset.name || prov} :`;
+        }
+        if (cfgBaseUrl && preset.base_url) {
+            cfgBaseUrl.value = preset.base_url;
+        }
+
+        // Live discovery from API
+        loadModelsFromProvider(selectedModel);
+    }
+
+    if (cfgProvider) {
+        cfgProvider.addEventListener('change', () => onProviderChange());
+    }
+
+    if (cfgApiKey) {
+        cfgApiKey.addEventListener('input', () => {
+            clearTimeout(fetchModelsTimeout);
+            fetchModelsTimeout = setTimeout(() => {
+                const curSel = cfgModelSelect ? cfgModelSelect.value : '';
+                loadModelsFromProvider(curSel);
+            }, 600);
+        });
+    }
+
+    if (cfgModelSelect) {
+        cfgModelSelect.addEventListener('change', () => {
+            if (cfgModelSelect.value === '__custom__') {
+                if (cfgModelCustom) {
+                    cfgModelCustom.classList.remove('hidden');
+                    cfgModelCustom.focus();
+                }
+            } else {
+                if (cfgModelCustom) cfgModelCustom.classList.add('hidden');
+            }
+        });
+    }
 
     const range = document.getElementById('cfg-font-size');
     const lbl = document.getElementById('lbl-font-size');
-    range.addEventListener('input', () => {
-        lbl.textContent = range.value == 0 ? "Auto-Fit (Adaptation automatique)" : `${range.value} px`;
-    });
+    if (range && lbl) {
+        range.addEventListener('input', () => {
+            lbl.textContent = range.value == 0 ? "Auto-Fit (Adaptation automatique)" : `${range.value} px`;
+        });
+    }
 
     btnSaveSettings.addEventListener('click', async () => {
+        let chosenModel = cfgModelSelect ? cfgModelSelect.value : '';
+        if (chosenModel === '__custom__' && cfgModelCustom) {
+            chosenModel = cfgModelCustom.value.trim();
+        }
+
         const payload = {
-            gemini_api_key: document.getElementById('cfg-gemini-key').value,
-            openrouter_api_key: document.getElementById('cfg-openrouter-key').value,
-            groq_api_key: document.getElementById('cfg-groq-key').value,
-            custom_base_url: document.getElementById('cfg-custom-base-url').value,
-            custom_api_key: document.getElementById('cfg-custom-api-key').value,
-            custom_model: document.getElementById('cfg-custom-model').value,
-            default_provider: document.getElementById('cfg-provider').value,
+            default_provider: cfgProvider.value,
+            selected_model: chosenModel,
+            custom_base_url: cfgBaseUrl.value.trim(),
+            custom_api_key: cfgApiKey.value.trim(),
+            groq_api_key: document.getElementById('cfg-groq-key').value.trim(),
             src_lang: document.getElementById('cfg-src-lang').value,
             tgt_lang: document.getElementById('cfg-tgt-lang').value,
             font_style: document.getElementById('cfg-font-style').value,
@@ -1006,7 +1107,6 @@ function initSettings() {
 
         if (res.ok) {
             settingsModal.classList.add('hidden');
-            updateApiStatusPills(payload);
             showToast("Paramètres enregistrés ✓", 'success');
         }
     });
@@ -1018,13 +1118,21 @@ async function fetchSettings() {
     try {
         const res = await fetch('/api/settings');
         const d = await res.json();
-        document.getElementById('cfg-gemini-key').value = d.gemini_api_key || '';
-        document.getElementById('cfg-openrouter-key').value = d.openrouter_api_key || '';
+        if (d.presets) {
+            providerPresets = d.presets;
+        }
+
+        const cfgProvider = document.getElementById('cfg-provider');
+        const cfgBaseUrl = document.getElementById('cfg-base-url');
+        const cfgApiKey = document.getElementById('cfg-api-key');
+
+        if (cfgProvider) cfgProvider.value = d.provider || 'gemini';
+        if (cfgBaseUrl) cfgBaseUrl.value = d.custom_base_url || 'https://openrouter.ai/api/v1';
+        if (cfgApiKey) {
+            cfgApiKey.value = d.custom_api_key || d.gemini_api_key || d.openrouter_api_key || '';
+        }
+
         document.getElementById('cfg-groq-key').value = d.groq_api_key || '';
-        document.getElementById('cfg-custom-base-url').value = d.custom_base_url || '';
-        document.getElementById('cfg-custom-api-key').value = d.custom_api_key || '';
-        document.getElementById('cfg-custom-model').value = d.custom_model || '';
-        document.getElementById('cfg-provider').value = d.provider || 'auto';
         document.getElementById('cfg-src-lang').value = d.src_lang || 'Japanese';
         document.getElementById('cfg-tgt-lang').value = d.tgt_lang || 'French';
         document.getElementById('cfg-font-style').value = d.font_style || 'bold';
@@ -1035,20 +1143,111 @@ async function fetchSettings() {
 
         updateApiStatusPills(d);
 
-        const cfgProvider = document.getElementById('cfg-provider');
-        if (cfgProvider) {
-            const v = cfgProvider.value;
-            const boxGemini = document.getElementById('box-gemini');
-            const boxOpenRouter = document.getElementById('box-openrouter');
-            const boxCustom = document.getElementById('box-custom');
-            if (boxGemini) boxGemini.style.display = (v === 'auto' || v === 'gemini') ? 'block' : 'none';
-            if (boxOpenRouter) boxOpenRouter.style.display = (v === 'auto' || v === 'openrouter') ? 'block' : 'none';
-            if (boxCustom) boxCustom.style.display = (v === 'custom') ? 'block' : 'none';
+        // Populate and select current model
+        const preset = providerPresets[cfgProvider.value] || {};
+        const selectedModel = d.selected_model || d.custom_model || preset.default_model || '';
+        const cfgModelSelect = document.getElementById('cfg-model-select');
+        const cfgModelCustom = document.getElementById('cfg-model-custom');
+
+        if (cfgModelSelect) {
+            cfgModelSelect.innerHTML = '';
+            const models = preset.models || [];
+            models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.label || m.id;
+                cfgModelSelect.appendChild(opt);
+            });
+            const optCustom = document.createElement('option');
+            optCustom.value = '__custom__';
+            optCustom.textContent = '✍️ Nom de modèle personnalisé...';
+            cfgModelSelect.appendChild(optCustom);
+
+            if (selectedModel && models.some(m => m.id === selectedModel)) {
+                cfgModelSelect.value = selectedModel;
+                if (cfgModelCustom) cfgModelCustom.classList.add('hidden');
+            } else if (selectedModel) {
+                cfgModelSelect.value = '__custom__';
+                if (cfgModelCustom) {
+                    cfgModelCustom.value = selectedModel;
+                    cfgModelCustom.classList.remove('hidden');
+                }
+            } else if (preset.default_model) {
+                cfgModelSelect.value = preset.default_model;
+                if (cfgModelCustom) cfgModelCustom.classList.add('hidden');
+            }
         }
     } catch (e) {
         console.error("Erreur chargement settings:", e);
     }
 }
+
+// Translation History logic
+function initHistory() {
+    const btnOpen = document.getElementById('btn-open-history');
+    const btnClose = document.getElementById('btn-close-history');
+    const btnCloseFooter = document.getElementById('btn-close-history-footer');
+    const historyModal = document.getElementById('history-modal');
+    const historyList = document.getElementById('history-list');
+
+    async function loadHistory() {
+        if (!historyList) return;
+        historyList.innerHTML = '<p class="box-hint">Chargement de l\'historique...</p>';
+        try {
+            const res = await fetch('/api/history');
+            const data = await res.json();
+            const items = data.history || [];
+            if (!items.length) {
+                historyList.innerHTML = '<p class="box-hint">Aucun manga traduit dans l\'historique pour le moment.</p>';
+                return;
+            }
+            historyList.innerHTML = items.map(it => `
+                <div class="history-item" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+                    <div>
+                        <strong style="font-size: 14px; display: block; color: var(--text-primary);">${it.filename}</strong>
+                        <small style="color: var(--text-secondary);">${it.date} • ${it.total_pages} page(s) • Modèle: ${it.model}</small>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-sm btn-secondary" onclick="openHistorySession('${it.session_id}')">📖 Ouvrir</button>
+                        <a href="${it.download_url}" class="btn btn-sm btn-primary" download>💾 Télécharger</a>
+                    </div>
+                </div>
+            `).join('');
+        } catch (err) {
+            historyList.innerHTML = '<p class="box-hint" style="color: var(--danger);">Erreur chargement historique.</p>';
+        }
+    }
+
+    if (btnOpen) {
+        btnOpen.addEventListener('click', () => {
+            loadHistory();
+            if (historyModal) historyModal.classList.remove('hidden');
+        });
+    }
+    if (btnClose && historyModal) {
+        btnClose.addEventListener('click', () => historyModal.classList.add('hidden'));
+    }
+    if (btnCloseFooter && historyModal) {
+        btnCloseFooter.addEventListener('click', () => historyModal.classList.add('hidden'));
+    }
+}
+
+window.openHistorySession = async function(sessionId) {
+    try {
+        const res = await fetch(`/api/session/${sessionId}`);
+        if (!res.ok) {
+            showToast("Session expirée de la mémoire, veuillez recharger le fichier", "warning");
+            return;
+        }
+        const data = await res.json();
+        activateSessionWorkspace(data);
+        const modal = document.getElementById('history-modal');
+        if (modal) modal.classList.add('hidden');
+        showToast(`Manga "${data.filename}" ouvert dans la liseuse !`, "success");
+    } catch (err) {
+        showToast("Erreur ouverture session : " + err.message, "error");
+    }
+};
 
 // Slow-Motion Mouse-Following Physics Engine (T12)
 function initSlowMotionMouseEngine() {

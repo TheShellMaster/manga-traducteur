@@ -9,19 +9,23 @@ echo " 📖 Manga Translator Studio (Web UI)"
 echo " Zéro Modèle Local • 100% Cloud Vision • Port 8000"
 echo "=========================================================="
 
-# 1. Activate venv if it exists
+# 1. If server is already running on port 8000, simply open the browser and exit
+if curl -s -m 2 http://127.0.0.1:8000/ >/dev/null 2>&1; then
+    echo "==> Le serveur est déjà actif sur http://localhost:8000 !"
+    echo "==> Ouverture de l'interface dans votre navigateur..."
+    xdg-open http://localhost:8000 2>/dev/null || sensible-browser http://localhost:8000 2>/dev/null || true
+    exit 0
+fi
+
+# 2. Activate venv
 if [ -d "venv" ]; then
     echo "==> Activation de l'environnement virtuel..."
     source venv/bin/activate
 fi
 
-# 2. Check and install requirements quietly
-echo "==> Vérification des dépendances..."
-pip install -r requirements.txt -q
-
-# 3. Open browser in background
-(sleep 2 && (xdg-open http://localhost:8000 2>/dev/null || sensible-browser http://localhost:8000 2>/dev/null || open http://localhost:8000 2>/dev/null)) &
+# 3. Open browser after 1.5s
+(sleep 1.5 && (xdg-open http://localhost:8000 2>/dev/null || sensible-browser http://localhost:8000 2>/dev/null || true)) &
 
 # 4. Launch FastAPI server
 echo "==> Démarrage du serveur web sur http://localhost:8000..."
-exec uvicorn server:app --host 0.0.0.0 --port 8000 --reload
+exec uvicorn server:app --host 127.0.0.1 --port 8000

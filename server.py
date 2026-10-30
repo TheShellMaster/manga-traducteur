@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 
-from app.config import load_env, save_env_key
+from app.config import load_env, save_env_key, PROVIDER_PRESETS
 from app.archives import ArchiveHandler, ArchiveItem
 from app.cloud_vision import CloudVisionClient
 from app.typesetter import render_manga_page
@@ -51,6 +51,58 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # In-memory session tracking
 sessions: Dict[str, Dict[str, Any]] = {}
+HISTORY_FILE = BASE_DIR / "history" / "sessions.json"
+
+
+def _record_session_history(session: Dict[str, Any], model_name: str = "Cloud Vision"):
+    try:
+        HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        history = []
+        if HISTORY_FILE.exists():
+            try:
+                history = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                history = []
+
+        history = [h for h in history if h.get("session_id") != session.get("session_id")]
+        history.insert(0, {
+            "session_id": session["session_id"],
+            "filename": session.get("filename", "Manga"),
+            "format": session.get("fmt", "cbz"),
+            "total_pages": session.get("total_pages", 0),
+            "date": time.strftime("%Y-%m-%d %H:%M"),
+            "model": model_name,
+            "download_url": f"/api/download/{session['session_id']}",
+        })
+        HISTORY_FILE.write_text(json.dumps(history[:50], indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        print("Erreur enregistrement historique:", e)
+
+
+@app.get("/api/history")
+def get_translation_history():
+    if not HISTORY_FILE.exists():
+        return {"history": []}
+    try:
+        items = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+        return {"history": items}
+    except Exception:
+        return {"history": []}
+
+
+@app.get("/api/session/{session_id}")
+def get_session_data(session_id: str):
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session en mémoire expirée")
+    return {
+        "session_id": session_id,
+        "filename": session["filename"],
+        "format": session["fmt"],
+        "total_pages": session["total_pages"],
+        "pages": session["pages"],
+        "status": session["status"],
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -68,16 +120,21 @@ def get_settings():
         "gemini_api_key": os.environ.get("GEMINI_API_KEY", ""),
         "openrouter_api_key": os.environ.get("OPENROUTER_API_KEY", ""),
         "groq_api_key": os.environ.get("GROQ_API_KEY", ""),
+        "openai_api_key": os.environ.get("OPENAI_API_KEY", ""),
+        "mistral_api_key": os.environ.get("MISTRAL_API_KEY", ""),
+        "nvidia_api_key": os.environ.get("NVIDIA_API_KEY", ""),
         "custom_base_url": os.environ.get("CUSTOM_BASE_URL", "https://openrouter.ai/api/v1"),
         "custom_api_key": os.environ.get("CUSTOM_API_KEY", ""),
         "custom_model": os.environ.get("CUSTOM_MODEL", "nvidia/nemotron-3.5-super-vl:free"),
         "provider": os.environ.get("DEFAULT_PROVIDER", "auto"),
+        "selected_model": os.environ.get("SELECTED_MODEL", ""),
         "src_lang": os.environ.get("SRC_LANG", "Japanese"),
         "tgt_lang": os.environ.get("TGT_LANG", "French"),
         "font_style": os.environ.get("FONT_STYLE", "bold"),
         "fixed_font_size": int(os.environ.get("FIXED_FONT_SIZE", 0)),
         "text_color": os.environ.get("TEXT_COLOR", "#000000"),
         "mask_style": os.environ.get("MASK_STYLE", "smart"),
+        "presets": PROVIDER_PRESETS,
     }
 
 
@@ -87,6 +144,146 @@ async def save_settings(data: Dict[str, Any]):
         if v is not None:
             save_env_key(k.upper(), str(v))
     return {"status": "ok", "message": "Paramètres sauvegardés avec succès"}
+
+
+@app.post("/api/models/fetch")
+async def fetch_provider_models_api(payload: Dict[str, Any]):
+    """
+    Live real model discovery from official API endpoints.
+    Receives { provider, api_key, base_url } and returns live model list directly from the provider.
+    Zero manual URL or model name typing required by the user.
+    """
+    import httpx
+
+    provider = str(payload.get("provider") or "gemini").lower()
+    load_env()
+    api_key = str(payload.get("api_key") or "").strip()
+    if not api_key:
+        api_key = (
+            os.environ.get(f"{provider.upper()}_API_KEY")
+            or os.environ.get("GEMINI_API_KEY" if provider == "gemini" else "OPENROUTER_API_KEY")
+            or ""
+        )
+
+    base_url = str(payload.get("base_url") or "").strip()
+
+    models_list = []
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            if provider == "gemini":
+                if not api_key:
+                    # Provide official verified presets if no key yet
+                    preset_models = PROVIDER_PRESETS.get("gemini", {}).get("models", [])
+                    return {"status": "ok", "provider": provider, "models": preset_models}
+                url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    d = resp.json()
+                    for m in d.get("models", []):
+                        m_id = m.get("name", "").replace("models/", "")
+                        methods = m.get("supportedGenerationMethods", [])
+                        if "generateContent" in methods and any(tag in m_id for tag in ("flash", "pro", "gemini")):
+                            label = m.get("displayName") or m_id
+                            models_list.append({"id": m_id, "label": f"{label} ({m_id})", "is_free": "flash" in m_id})
+                else:
+                    preset_models = PROVIDER_PRESETS.get("gemini", {}).get("models", [])
+                    return {"status": "ok", "provider": provider, "models": preset_models, "warning": f"API Gemini HTTP {resp.status_code}"}
+
+            elif provider == "openrouter":
+                headers = {"User-Agent": "Mozilla/5.0"}
+                if api_key:
+                    headers["Authorization"] = f"Bearer {api_key}"
+                resp = await client.get("https://openrouter.ai/api/v1/models", headers=headers)
+                if resp.status_code == 200:
+                    d = resp.json()
+                    free_list = []
+                    paid_list = []
+                    for m in d.get("data", []):
+                        mid = m.get("id", "")
+                        arch = m.get("architecture") or {}
+                        in_mod = arch.get("input_modalities") or []
+                        mod = arch.get("modality") or ""
+                        has_img = "image" in in_mod or "image" in mod or "vision" in mid.lower() or "vl" in mid.lower()
+                        is_free = mid.endswith(":free")
+                        if has_img:
+                            name = m.get("name") or mid
+                            if is_free:
+                                free_list.append({"id": mid, "label": f"✨ {name} (Gratuit)", "is_free": True})
+                            elif any(k in mid for k in ("gpt-4o", "claude-3.5", "qwen", "gemini", "llama-3.2", "mistral")):
+                                paid_list.append({"id": mid, "label": f"{name}", "is_free": False})
+                    # Prioritize free vision models at the top
+                    models_list = free_list + paid_list
+                else:
+                    models_list = PROVIDER_PRESETS.get("openrouter", {}).get("models", [])
+
+            elif provider == "openai":
+                headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+                resp = await client.get("https://api.openai.com/v1/models", headers=headers)
+                if resp.status_code == 200:
+                    d = resp.json()
+                    for m in d.get("data", []):
+                        mid = m.get("id", "")
+                        if "gpt-4o" in mid or "o1" in mid or "gpt-4-turbo" in mid:
+                            models_list.append({"id": mid, "label": mid, "is_free": False})
+                    models_list.sort(key=lambda x: x["id"])
+                else:
+                    models_list = PROVIDER_PRESETS.get("openai", {}).get("models", [])
+
+            elif provider == "groq":
+                headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+                resp = await client.get("https://api.groq.com/openai/v1/models", headers=headers)
+                if resp.status_code == 200:
+                    d = resp.json()
+                    for m in d.get("data", []):
+                        mid = m.get("id", "")
+                        models_list.append({"id": mid, "label": f"{mid} (Groq LPU)", "is_free": True})
+                else:
+                    models_list = PROVIDER_PRESETS.get("groq", {}).get("models", [])
+
+            elif provider == "mistral":
+                headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+                resp = await client.get("https://api.mistral.ai/v1/models", headers=headers)
+                if resp.status_code == 200:
+                    d = resp.json()
+                    for m in d.get("data", []):
+                        mid = m.get("id", "")
+                        if "pixtral" in mid or "large" in mid or "vision" in mid:
+                            models_list.append({"id": mid, "label": mid, "is_free": False})
+                else:
+                    models_list = PROVIDER_PRESETS.get("mistral", {}).get("models", [])
+
+            elif provider == "nvidia":
+                headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+                resp = await client.get("https://integrate.api.nvidia.com/v1/models", headers=headers)
+                if resp.status_code == 200:
+                    d = resp.json()
+                    for m in d.get("data", []):
+                        mid = m.get("id", "")
+                        if "vision" in mid or "vl" in mid or "embed" not in mid:
+                            models_list.append({"id": mid, "label": mid, "is_free": False})
+                else:
+                    models_list = PROVIDER_PRESETS.get("nvidia", {}).get("models", [])
+
+            else:
+                # Custom or Ollama local/cloud endpoint
+                target_url = (base_url or "http://localhost:11434/v1").rstrip("/") + "/models"
+                headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+                resp = await client.get(target_url, headers=headers)
+                if resp.status_code == 200:
+                    d = resp.json()
+                    for m in d.get("data", []):
+                        mid = m.get("id", "")
+                        models_list.append({"id": mid, "label": mid, "is_free": False})
+
+    except Exception as e:
+        preset_models = PROVIDER_PRESETS.get(provider, {}).get("models", [])
+        return {"status": "ok", "provider": provider, "models": preset_models, "warning": str(e)}
+
+    if not models_list:
+        models_list = PROVIDER_PRESETS.get(provider, {}).get("models", [])
+
+    return {"status": "ok", "provider": provider, "models": models_list}
 
 
 def _init_session_from_path(session_id: str, session_dir: Path, input_path: Path, display_name: str) -> Dict[str, Any]:
@@ -350,7 +547,9 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
             context_history=context_history[-8:],
         )
         if res.get("status") == "done":
-            for b in res.get("blocks", []):
+            last_model = res.get("model", "Cloud Vision")
+            last_blocks = res.get("blocks", [])
+            for b in last_blocks:
                 if b.get("original") or b.get("translation"):
                     context_history.append({
                         "original": b.get("original", ""),
@@ -359,9 +558,23 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
             if len(context_history) > 8:
                 context_history = context_history[-8:]
 
+            # Live LLM translation feed
+            if last_blocks:
+                sample_b = last_blocks[0]
+                orig_snippet = sample_b.get("original", "")[:35]
+                trans_snippet = sample_b.get("translation", "")[:40]
+                session["last_bubble"] = {
+                    "page": idx + 1,
+                    "original": orig_snippet,
+                    "translation": trans_snippet,
+                    "model": last_model,
+                }
+                session["current_log"] = f"[{last_model}] Page {idx + 1}/{total} : « {orig_snippet} » ➜ « {trans_snippet} »"
+
     session["status"] = "finished"
     session["progress_percent"] = 100
-    session["current_log"] = "Traduction du manga terminée avec succès !"
+    session["current_log"] = f"Traduction terminée avec succès via {last_model} !"
+    _record_session_history(session, model_name=last_model)
 
 
 @app.post("/api/translate/start")
@@ -524,6 +737,7 @@ def get_session_status(session_id: str):
         "total_pages": session["total_pages"],
         "progress_percent": session["progress_percent"],
         "current_log": session["current_log"],
+        "last_bubble": session.get("last_bubble"),
         "pages": session["pages"],
     }
 

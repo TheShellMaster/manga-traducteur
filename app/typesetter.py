@@ -287,9 +287,11 @@ def _apply_smart_bubble_mask(
             got85 = True
             break
 
-    is_dark_bg = median < 128
-    is_screentone = (128 <= median < 225)
-    bg_luma = int(p15) if is_dark_bg else int(max(245, p85))
+    # True dark narration boxes have dark background pixels even at high percentiles (p85 < 115)
+    # Never treat a white bubble with dense black text as a dark background!
+    is_dark_bg = (p85 < 115)
+    is_screentone = (115 <= p85 < 210 and median < 200)
+    bg_luma = int(p15) if is_dark_bg else int(max(248, p85))
     bg_rgb = (bg_luma, bg_luma, bg_luma)
 
     if is_dark_bg:
@@ -411,6 +413,10 @@ def render_manga_page(
         box_w = px1 - px0
         box_h = py1 - py0
         if box_w < 8 or box_h < 8:
+            continue
+
+        # Prevent runaway bounding boxes from wiping out entire manga panels or full pages
+        if box_w > width * 0.48 and box_h > height * 0.48:
             continue
 
         fg_color = default_fg

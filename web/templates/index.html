@@ -31,6 +31,9 @@
             <button id="btn-theme-toggle" class="btn btn-icon" aria-label="Basculer le thème clair ou sombre" title="Thème Clair / Sombre">
                 <span id="theme-icon">🌙</span>
             </button>
+            <button id="btn-open-history" class="btn btn-secondary" aria-label="Ouvrir l'historique des traductions">
+                📜 Historique
+            </button>
             <button id="btn-open-settings" class="btn btn-secondary" aria-label="Ouvrir les paramètres et clés d'API">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 Paramètres & APIs
@@ -164,6 +167,7 @@
                             <span class="progress-eta" id="progress-eta">Temps estimé : calcul...</span>
                         </div>
                         <div class="progress-log" id="progress-log">Initialisation...</div>
+                        <div class="progress-live-feed" id="progress-live-feed" style="font-size: 11px; color: var(--primary); margin-top: 4px; font-weight: 600;">⚡ En attente du flux LLM...</div>
                     </div>
                     <div class="progress-percent" id="progress-percent">0%</div>
                     <button id="btn-cancel-translation" class="btn btn-danger btn-sm" aria-label="Annuler la traduction en cours">
@@ -277,60 +281,44 @@
                     <button class="tab-btn" data-tab="tab-style" role="tab">Style & Bulles</button>
                 </div>
 
-                <!-- Tab 1: API Providers -->
+                <!-- Tab 1: API Providers & Model Selection -->
                 <div id="tab-api" class="tab-pane active">
                     <div class="form-group">
-                        <label for="cfg-provider">Fournisseur de Vision :</label>
+                        <label for="cfg-provider">Fournisseur d'IA :</label>
                         <select id="cfg-provider" class="form-select">
-                            <option value="auto">Auto (Gemini en priorité, OpenRouter en repli)</option>
-                            <option value="gemini">Google Gemini (Gratuit 1500 req/jour)</option>
-                            <option value="openrouter">OpenRouter (Modèles gratuits ou payants)</option>
-                            <option value="custom">API Personnalisée (N'importe quel endpoint OpenAI-compatible)</option>
+                            <option value="gemini">Google Gemini (Officiel - 1500 req/jour gratuites)</option>
+                            <option value="openrouter">OpenRouter (Multi-modèles gratuits & payants)</option>
+                            <option value="openai">OpenAI (GPT-4o, GPT-4o-mini)</option>
+                            <option value="groq">Groq Cloud (Llama 3.2 Vision ultra-rapide)</option>
+                            <option value="mistral">Mistral AI (Pixtral 12B / Large)</option>
+                            <option value="nvidia">NVIDIA NIM (Nemotron VL, Llama 3.2 Vision)</option>
+                            <option value="custom">Endpoint Personnalisé (Ollama, vLLM, API compatible)</option>
+                            <option value="auto">Auto (Gemini en priorité, replis automatiques)</option>
                         </select>
                     </div>
 
-                    <!-- Gemini Box -->
-                    <div class="provider-box" id="box-gemini">
-                        <div class="box-title">Google Gemini (Recommandé - 100% Gratuit)</div>
-                        <p class="box-hint">1500 requêtes gratuites/jour avec une clé sur <a href="https://aistudio.google.com" target="_blank" rel="noopener">Google AI Studio</a>.</p>
-                        <div class="form-group">
-                            <label for="cfg-gemini-key">Clé d'API Gemini (GEMINI_API_KEY) :</label>
-                            <input type="password" id="cfg-gemini-key" class="form-input" placeholder="Votre clé API Gemini...">
-                        </div>
+                    <div class="form-group">
+                        <label for="cfg-model-select">Modèle de Vision :</label>
+                        <select id="cfg-model-select" class="form-select">
+                            <!-- Populated dynamically based on chosen provider -->
+                        </select>
+                        <input type="text" id="cfg-model-custom" class="form-input hidden" style="margin-top: 8px;" placeholder="Tapez le nom exact du modèle (ex: gpt-4o, llama3.2-vision)...">
                     </div>
 
-                    <!-- OpenRouter Box -->
-                    <div class="provider-box" id="box-openrouter">
-                        <div class="box-title">OpenRouter</div>
-                        <p class="box-hint">Permet d'utiliser Gemma-4 Vision, Nemotron-VL gratuitement sur <a href="https://openrouter.ai" target="_blank" rel="noopener">openrouter.ai</a>.</p>
-                        <div class="form-group">
-                            <label for="cfg-openrouter-key">Clé d'API OpenRouter (OPENROUTER_API_KEY) :</label>
-                            <input type="password" id="cfg-openrouter-key" class="form-input" placeholder="Votre clé API OpenRouter...">
-                        </div>
+                    <div class="form-group" id="group-base-url" style="display: none;">
+                        <label for="cfg-base-url">URL de Base de l'API (Remplie automatiquement) :</label>
+                        <input type="text" id="cfg-base-url" class="form-input" placeholder="https://api.example.com/v1">
                     </div>
 
-                    <!-- Custom API Endpoint Box -->
-                    <div class="provider-box" id="box-custom">
-                        <div class="box-title">Endpoint Personnalisé (OpenAI-compatible)</div>
-                        <p class="box-hint">Permet de brancher n'importe quelle API distante compatible (Groq, Mistral, Ollama Cloud, etc.).</p>
-                        <div class="form-group">
-                            <label for="cfg-custom-base-url">Base URL :</label>
-                            <input type="text" id="cfg-custom-base-url" class="form-input" placeholder="https://api.monserveur.com/v1">
-                        </div>
-                        <div class="form-group">
-                            <label for="cfg-custom-api-key">Clé d'API :</label>
-                            <input type="password" id="cfg-custom-api-key" class="form-input" placeholder="Votre clé API...">
-                        </div>
-                        <div class="form-group">
-                            <label for="cfg-custom-model">Identifiant du modèle de Vision :</label>
-                            <input type="text" id="cfg-custom-model" class="form-input" placeholder="ex: google/gemma-4-31b-it:free">
-                        </div>
+                    <div class="form-group">
+                        <label for="cfg-api-key" id="lbl-api-key">Clé d'API du Fournisseur :</label>
+                        <input type="password" id="cfg-api-key" class="form-input" placeholder="Votre clé API...">
                     </div>
 
                     <!-- Groq Refine Box -->
-                    <div class="provider-box">
+                    <div class="provider-box" style="margin-top: 14px;">
                         <div class="box-title">Raffinement de texte via Groq (Optionnel)</div>
-                        <p class="box-hint">Améliore la fluidité du français parlé à très haute vitesse via <a href="https://groq.com" target="_blank" rel="noopener">groq.com</a>.</p>
+                        <p class="box-hint">Polit et harmonise le français parlé en style manga via <a href="https://groq.com" target="_blank" rel="noopener">groq.com</a>.</p>
                         <div class="form-group">
                             <label for="cfg-groq-key">Clé d'API Groq (GROQ_API_KEY) :</label>
                             <input type="password" id="cfg-groq-key" class="form-input" placeholder="Votre clé API Groq...">
@@ -405,6 +393,24 @@
             </div>
             <div class="modal-footer">
                 <button id="btn-save-settings" class="btn btn-primary">Enregistrer les Paramètres</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal Drawer -->
+    <div id="history-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-history-title">
+        <div class="modal-content" style="max-width: 680px;">
+            <div class="modal-header">
+                <h2 id="modal-history-title">📜 Historique des Mangas Traduits</h2>
+                <button id="btn-close-history" class="btn-close" aria-label="Fermer l'historique">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="history-list" class="history-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow-y: auto;">
+                    <p class="box-hint">Chargement de l'historique...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-close-history-footer" class="btn btn-secondary">Fermer</button>
             </div>
         </div>
     </div>

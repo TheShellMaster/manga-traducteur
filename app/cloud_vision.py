@@ -11,9 +11,9 @@ from PIL import Image
 from app.config import (
     load_env,
     OPENROUTER_FREE_VISION_MODELS,
-    OLLAMA_CLOUD_VISION_MODELS,
     NVIDIA_NIM_VISION_MODELS,
     GEMINI_FREE_VISION_MODELS,
+    PROVIDER_PRESETS,
 )
 
 
@@ -114,6 +114,15 @@ def parse_and_validate_blocks(raw_text: str) -> List[Dict[str, Any]]:
                 data = json.loads(raw[start:end + 1])
             except Exception:
                 pass
+        if data is None and start != -1:
+            # Attempt to salvage truncated JSON array
+            sub = raw[start:]
+            last_brace = sub.rfind("}")
+            if last_brace != -1:
+                try:
+                    data = json.loads(sub[:last_brace + 1] + "]")
+                except Exception:
+                    pass
 
     if data is None:
         raise ValueError(f"Réponse LLM non-JSON : {raw[:200]}")
@@ -255,16 +264,19 @@ class CloudVisionClient:
         prompt = build_system_prompt(self.src_lang, self.tgt_lang, context_history=context_history)
         errors: List[str] = []
 
-        # 1. Explicit Custom / OpenAI compatible endpoint
-        if self.provider == "custom" or (self.base_url and self.api_key and self.model):
+        # 1. Explicit Custom / OpenAI compatible endpoint or specific providers (OpenAI, Groq, Mistral, Nvidia)
+        if self.provider in ("custom", "openai", "groq", "mistral", "nvidia") or (self.base_url and self.api_key and self.model):
+            preset = PROVIDER_PRESETS.get(self.provider, {})
+            target_url = self.base_url or preset.get("base_url") or "https://openrouter.ai/api/v1"
+            target_model = self.model or preset.get("default_model") or "gpt-4o-mini"
             blocks = self._call_openai_compatible(
                 b64_str=b64_str,
-                base_url=self.base_url or "https://openrouter.ai/api/v1",
+                base_url=target_url,
                 api_key=self.api_key or "",
-                model_name=self.model or OPENROUTER_FREE_VISION_MODELS[0],
+                model_name=target_model,
                 prompt=prompt,
             )
-            return blocks, f"custom/{self.model}"
+            return blocks, f"{self.provider}/{target_model}"
 
         # 2. Native Anthropic (if configured)
         if self.provider == "anthropic" or (self.provider == "auto" and os.environ.get("ANTHROPIC_API_KEY")):
@@ -309,27 +321,10 @@ class CloudVisionClient:
                 except Exception as exc:
                     err_str = str(exc)
                     errors.append(f"OpenRouter/{m}: {err_str[:140]}")
-                    # If daily account-wide free quota is exhausted, jump directly to fallback providers
                     if "free-models-per-day" in err_str:
                         break
 
-        # 5. Fallback to Ollama Cloud Free Vision (gemma4:31b) if available
-        ollama_key = os.environ.get("OLLAMA_API_KEY")
-        if ollama_key:
-            for m in OLLAMA_CLOUD_VISION_MODELS:
-                try:
-                    blocks = self._call_openai_compatible(
-                        b64_str=b64_str,
-                        base_url="https://ollama.com/v1",
-                        api_key=ollama_key,
-                        model_name=m,
-                        prompt=prompt,
-                    )
-                    return blocks, f"ollama-cloud/{m}"
-                except Exception as exc:
-                    errors.append(f"OllamaCloud/{m}: {str(exc)[:140]}")
-
-        # 6. Fallback to NVIDIA NIM Vision if available
+        # 5. Fallback to NVIDIA NIM Vision if available
         nv_key = os.environ.get("NVIDIA_API_KEY")
         if nv_key:
             for m in NVIDIA_NIM_VISION_MODELS:
@@ -344,6 +339,22 @@ class CloudVisionClient:
                     return blocks, f"nvidia-nim/{m}"
                 except Exception as exc:
                     errors.append(f"NvidiaNIM/{m}: {str(exc)[:140]}")
+
+        # 6. Fallback to Ollama Cloud if available (verified on https://ollama.com/v1/models)
+        ollama_key = os.environ.get("OLLAMA_API_KEY")
+        if ollama_key:
+            for m in ("gemma4:31b", "nemotron-3-nano:30b"):
+                try:
+                    blocks = self._call_openai_compatible(
+                        b64_str=b64_str,
+                        base_url="https://ollama.com/v1",
+                        api_key=ollama_key,
+                        model_name=m,
+                        prompt=prompt,
+                    )
+                    return blocks, f"ollama-cloud/{m}"
+                except Exception as exc:
+                    errors.append(f"OllamaCloud/{m}: {str(exc)[:140]}")
 
         raise RuntimeError("Échec Vision (" + " | ".join(errors) + ")")
 

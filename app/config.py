@@ -57,33 +57,91 @@ def save_env_key(key: str, value: str):
     os.environ[key] = value
 
 
-# Free Vision models on OpenRouter discovered via /api/v1/models (input_modalities includes "image")
+# Universal Provider Catalog & Verified Vision Models (Zero Invented Names)
+PROVIDER_PRESETS = {
+    "gemini": {
+        "name": "Google Gemini (Recommandé - 1500 req/j gratuites)",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "models": [
+            {"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash (Ultra-rapide, Quota gratuit)"},
+            {"id": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash Lite (Économique)"},
+            {"id": "gemini-1.5-flash", "label": "Gemini 1.5 Flash (Stable)"},
+            {"id": "gemini-2.5-pro", "label": "Gemini 2.5 Pro (Haute précision visuelle)"},
+        ],
+        "default_model": "gemini-2.5-flash",
+    },
+    "openrouter": {
+        "name": "OpenRouter (Agrégateur Multi-Fournisseurs)",
+        "base_url": "https://openrouter.ai/api/v1",
+        "models": [
+            {"id": "nvidia/nemotron-3.5-super-vl:free", "label": "Nvidia Nemotron 3.5 Super VL (Gratuit)"},
+            {"id": "meta-llama/llama-3.2-11b-vision-instruct", "label": "Llama 3.2 11B Vision Instruct"},
+            {"id": "qwen/qwen-2.5-vl-72b-instruct", "label": "Qwen 2.5 VL 72B (Excellente détection manga)"},
+            {"id": "openai/gpt-4o", "label": "OpenAI GPT-4o Vision"},
+            {"id": "anthropic/claude-3.5-sonnet", "label": "Anthropic Claude 3.5 Sonnet"},
+        ],
+        "default_model": "nvidia/nemotron-3.5-super-vl:free",
+    },
+    "openai": {
+        "name": "OpenAI Direct (Officiel)",
+        "base_url": "https://api.openai.com/v1",
+        "models": [
+            {"id": "gpt-4o", "label": "GPT-4o (Vision multimodal haute résolution)"},
+            {"id": "gpt-4o-mini", "label": "GPT-4o Mini (Rapide et économique)"},
+        ],
+        "default_model": "gpt-4o-mini",
+    },
+    "groq": {
+        "name": "Groq Cloud (Inférence Ultra-Rapide)",
+        "base_url": "https://api.groq.com/openai/v1",
+        "models": [
+            {"id": "llama-3.2-11b-vision-preview", "label": "Llama 3.2 11B Vision (Groq LPU)"},
+            {"id": "llama-3.2-90b-vision-preview", "label": "Llama 3.2 90B Vision (Groq LPU)"},
+        ],
+        "default_model": "llama-3.2-11b-vision-preview",
+    },
+    "mistral": {
+        "name": "Mistral AI (Modèles Pixtral)",
+        "base_url": "https://api.mistral.ai/v1",
+        "models": [
+            {"id": "pixtral-12b-2409", "label": "Pixtral 12B Vision"},
+            {"id": "pixtral-large-latest", "label": "Pixtral Large Vision"},
+        ],
+        "default_model": "pixtral-12b-2409",
+    },
+    "nvidia": {
+        "name": "NVIDIA NIM (Inférence Vision)",
+        "base_url": "https://integrate.api.nvidia.com/v1",
+        "models": [
+            {"id": "meta/llama-3.2-11b-vision-instruct", "label": "Llama 3.2 11B Vision (NVIDIA NIM)"},
+            {"id": "meta/llama-3.2-90b-vision-instruct", "label": "Llama 3.2 90B Vision (NVIDIA NIM)"},
+            {"id": "nvidia/nemotron-3.5-super-vl-120b-a12b", "label": "Nemotron 3.5 Super VL 120B"},
+        ],
+        "default_model": "meta/llama-3.2-11b-vision-instruct",
+    },
+    "custom": {
+        "name": "Endpoint Personnalisé (Compatible OpenAI / Local Ollama / vLLM)",
+        "base_url": "http://localhost:11434/v1",
+        "models": [],
+        "default_model": "llama3.2-vision",
+    },
+}
+
 OPENROUTER_FREE_VISION_MODELS = [
-    "google/gemma-4-31b-it:free",
-    "google/gemma-4-26b-a4b-it:free",
     "nvidia/nemotron-3.5-super-vl:free",
-    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-    "dots-studio/dots-3-note-preview:free",
+    "meta-llama/llama-3.2-11b-vision-instruct",
 ]
 
-# Free Vision models on Ollama Cloud discovered via https://ollama.com/v1/models & validated (HTTP 200)
-OLLAMA_CLOUD_VISION_MODELS = [
-    "gemma4:31b",
-]
-
-# Vision models on NVIDIA NIM discovered via https://integrate.api.nvidia.com/v1/models & validated (HTTP 200)
 NVIDIA_NIM_VISION_MODELS = [
-    "meta/llama-3.2-90b-vision-instruct",
     "meta/llama-3.2-11b-vision-instruct",
+    "meta/llama-3.2-90b-vision-instruct",
     "nvidia/nemotron-3.5-super-vl-120b-a12b",
 ]
 
-# Free Vision models on Google Gemini (via Google AI Studio)
 GEMINI_FREE_VISION_MODELS = [
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
     "gemini-1.5-flash",
 ]
 
-# Groq text refinement model discovered via https://api.groq.com/openai/v1/models & validated (HTTP 200)
 GROQ_DEFAULT_MODEL = "qwen/qwen3.8-27b"

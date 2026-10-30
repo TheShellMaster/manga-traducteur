@@ -436,3 +436,21 @@ def test_multi_manga_resolution_and_webtoon_generalization():
     assert out_wt.size == (800, 3200)
 
 
+def test_api_models_fetch_endpoint():
+    # Test model fetch for gemini preset fallback
+    res_gem = client.post("/api/models/fetch", json={"provider": "gemini", "api_key": ""})
+    assert res_gem.status_code == 200
+    d_gem = res_gem.json()
+    assert d_gem["status"] == "ok"
+    assert len(d_gem["models"]) >= 3
+    assert any("gemini-2.5-flash" in m["id"] for m in d_gem["models"])
+
+    # Test model fetch for openai preset fallback
+    res_oa = client.post("/api/models/fetch", json={"provider": "openai", "api_key": ""})
+    assert res_oa.status_code == 200
+    d_oa = res_oa.json()
+    assert d_oa["status"] == "ok"
+    assert any("gpt-4o" in m["id"] for m in d_oa["models"])
+
+
+
