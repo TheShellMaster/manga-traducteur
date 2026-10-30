@@ -9,30 +9,33 @@ description: >-
 ## 1. Architecture du Projet (15 lignes max)
 ```text
 server.py                  # FastAPI backend: /api/upload, /api/upload_folder, /api/translate/start, /api/status, /api/image, /api/download
-app/config.py              # .env loader/saver, constantes, listes de modèles vision découverts & validés
+app/launcher.py            # Lanceur monoprocessus (pywebview ou navigateur + watchdog heartbeat auto-exit)
+app/config.py              # .env loader/saver, constantes, presets providers, polices embarquées app/fonts/
 app/archives.py            # ArchiveHandler: extract & pack pour CBZ/ZIP, CBR/RAR (unrar/7z), folder, image
-app/cloud_vision.py        # CloudVisionClient: détection bulles + traduction via Gemini, OpenRouter, Anthropic, ou Custom OpenAI
+app/cloud_vision.py        # CloudVisionClient: détection bulles + traduction via Gemini, OpenRouter, Anthropic, Custom
 app/groq_refine.py         # Raffinement optionnel du texte traduit via Groq API
-app/typesetter.py          # Inpainting doux (rounded/ellipse/rectangle/transparent) & rendu typographique Pillow (auto-fit ou fixe)
-app/pipeline.py            # Pipeline séquentiel de bout en bout
-web/templates/index.html   # Interface Web Studio (upload fichier/dossier, comparateur, slider, liseuse, modale settings)
-web/static/css/style.css   # Thème sombre, animations, slider comparatif, badges, toasts, responsive mobile
-web/static/js/app.js       # Logique frontend, drag&drop, polling temps réel, slider interactif, toasts
-tests/test_suite.py        # Suite de tests pytest (parser, typesetter, archives, API TestClient, worker mocké)
+app/typesetter.py          # Inpainting doux (smart/rounded/ellipse) & typographie (mask_only=True pour clean stage)
+app/fonts/                 # Polices TrueType locales embarquées (DejaVuSans, LiberationSans)
+web/templates/index.html   # Interface Web moderne et épurée (drop-zone, studio, liseuse, bibliothèque, paramètres)
+web/static/css/style.css   # Feuille de style minimale et moderne (thème sombre, responsive mobile/desktop)
+web/static/js/app.js       # Logique frontend centralisée (state, navigation, upload, drag&drop, studio)
+tests/test_suite.py        # Suite de tests pytest (41 tests automatisés)
 LESSONS.md                 # Journal des erreurs rencontrées et correctifs appliqués
 ```
 
 ## 2. Règles Strictes & Invariants
-1. **Preuve obligatoire** : *Ne jamais annoncer "terminé" sans sortie de test collée.*
-2. **Validation Visuelle Obligatoire (No Blind UI Validation)** : *Aucune modification CSS/JS ne peut être déclarée terminée sans une capture d'écran Playwright réelle (`browser_take_screenshot`) et une inspection des dimensions calculées (`getBoundingClientRect()`). Les tests Python unitaires ne remplacent JAMAIS un test visuel de l'interface.*
-3. **Sanity & Isolation du DOM (Zero Leaking Elements)** : *Tout effet interactif injectant des éléments dans le DOM (ripples, halos, tooltips) doit obligatoirement avoir `position: absolute`, `pointer-events: none`, un `overflow: hidden` sur le conteneur parent, et un `setTimeout` de secours garantissant la suppression de l'élément même si l'animation CSS échoue.*
-4. **Découverte et validation des modèles IA** : *Les noms de modèles IA doivent être uniquement découverts via l'endpoint `/models` (ou `/v1/models`) du fournisseur et validés par un appel d'inférence réel avant d'être inscrits dans la configuration.*
-5. **Zéro modèle local** : Aucune dépendance d'inférence locale lourde (`torch`, `tesseract`, `onnxruntime`). Empreinte RAM cible < 50 Mo hors pic.
-6. **Journalisation continue** : Relire `LESSONS.md` avant chaque tâche et y ajouter `[date] erreur -> cause -> correction` à chaque bug rencontré.
+1. **Discipline de Simplification & Monoprocessus (The Opus Standard)** : *Priorité absolue à la compacité et à la robustesse native. Ne jamais ajouter un deuxième processus (tray, helper) ou des scripts injecteurs de DOM quand un mécanisme passif standard (Heartbeat HTTP, CSS pur, événement de cycle de vie) résout le problème avec dix fois moins de code.*
+2. **Protection Anti-Régression sur Refonte Radicale (Zero Feature Dropped)** : *Toute simplification ou réécriture du code (notamment en contexte de contrainte de tokens) doit obligatoirement préserver la parité fonctionnelle. Les éléments clés (statut des APIs, choix direct du modèle, support du mode automatique zéro configuration) ne doivent JAMAIS être sacrifiés sous prétexte d'alléger le code.*
+3. **Cycle Strict « Développer ➔ Tester ➔ Vérifier ➔ Améliorer »** : *Chaque amélioration suit 4 étapes : 1) Développer (code minimal, typé) 2) Tester (pytest & node --check) 3) Vérifier (Playwright DOM & screenshot) 4) Améliorer (mesure de latence, purge du code inutile, persistance dans LESSONS.md).*
+4. **Preuve obligatoire** : *Ne jamais annoncer "terminé" sans sortie de test collée.*
+5. **Validation Visuelle Obligatoire (No Blind UI Validation)** : *Aucune modification CSS/JS ne peut être déclarée terminée sans une capture d'écran Playwright réelle (`browser_take_screenshot`) et une inspection des dimensions calculées (`getBoundingClientRect()`).*
+6. **Découverte et validation des modèles IA** : *Les noms de modèles IA doivent être uniquement découverts via l'endpoint `/models` (ou `/v1/models`) du fournisseur et validés par un appel d'inférence réel avant d'être inscrits dans la configuration.*
+7. **Zéro modèle local** : Aucune dépendance d'inférence locale lourde (`torch`, `tesseract`, `onnxruntime`). Empreinte RAM cible < 50 Mo hors pic.
+8. **Journalisation continue** : Relire `LESSONS.md` avant chaque tâche et y ajouter `[date] erreur -> cause -> correction` à chaque bug rencontré.
 
 ## 3. Checklist de Vérification Obligatoire (avant toute validation)
 Exécuter systématiquement ces 5 vérifications dans l'ordre :
-1. **Syntaxe JS** : `node --check web/static/js/app.js` et `node --check web/static/js/animations.js`
+1. **Syntaxe JS** : `node --check web/static/js/app.js`
 2. **Import Backend** : `./venv/bin/python -c "from server import app; print('Import OK')"`
 3. **Tests Unitaires & API** : `./venv/bin/pytest tests/ -q`
 4. **Test HTTP Réel** : Vérifier que le serveur répond sur `http://localhost:8000` via `curl`.
