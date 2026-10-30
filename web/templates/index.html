@@ -1,635 +1,314 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manga Translator Studio | AI Cloud Vision</title>
-    <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" content="#6366f1">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Manga Translator">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23f43f5e'/%3E%3Cstop offset='100%25' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='900' font-size='28'%3E漫%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/animations.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Bangers&display=swap" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c0d12">
+  <title>Manga Translator Studio</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" href="/static/icons/icon-192.png">
+  <link rel="stylesheet" href="/static/css/style.css?v=3">
 </head>
-<body class="dark-theme">
-    <!-- Header -->
-    <header class="app-header">
-        <div class="logo-group">
-            <div class="logo-badge" aria-hidden="true">漫画</div>
-            <div class="logo-text">
-                <h1>Manga Translator <span>Studio</span></h1>
-                <p>100% Cloud Vision • Zéro Modèle Local • CBZ, CBR, RAR & Dossier</p>
-            </div>
-        </div>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 7h13m0 0-4-4m4 4-4 4M17 17H4m0 0 4-4m-4 4 4 4"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  </svg>
 
-        <div class="api-status-pills" id="api-status-pills" aria-label="État des clés d'API">
-            <span class="status-pill" id="pill-gemini" title="Statut clé Google Gemini">Gemini : —</span>
-            <span class="status-pill" id="pill-openrouter" title="Statut clé OpenRouter">OpenRouter : —</span>
-            <span class="status-pill" id="pill-groq" title="Statut clé Groq">Groq : —</span>
-            <span class="status-pill" id="pill-update" title="Statut de mise à jour GitHub">v2.1 (Vérification...)</span>
-        </div>
-
-        <div class="header-actions">
-            <button id="btn-theme-toggle" class="btn btn-icon" aria-label="Basculer le thème clair ou sombre" title="Thème Clair / Sombre">
-                <span id="theme-icon">🌙</span>
-            </button>
-            <button id="btn-open-library" class="btn btn-secondary" aria-label="Ouvrir la bibliothèque permanente des mangas">
-                📚 Bibliothèque
-            </button>
-            <button id="btn-open-history" class="btn btn-secondary" aria-label="Ouvrir l'historique des traductions">
-                📜 Historique
-            </button>
-            <button id="btn-open-settings" class="btn btn-secondary" aria-label="Ouvrir les paramètres et clés d'API">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                Paramètres & APIs
-            </button>
-            <button type="button" id="btn-help" class="btn btn-icon" aria-label="Aide et raccourcis clavier" title="Guide & Raccourcis Clavier">?</button>
-        </div>
+  <div class="app" id="app">
+    <header class="topbar">
+      <a class="brand" href="#translate" data-nav="translate">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span></span>
+        <span class="brand-name">Manga Translator <em>Studio</em></span>
+      </a>
+      <nav class="tabs" id="nav-tabs">
+        <button class="tab active" data-nav="translate">Traduire</button>
+        <button class="tab" data-nav="library">Bibliothèque</button>
+        <button class="tab" data-nav="guide">Guide</button>
+        <span class="tab-indicator" id="tab-indicator"></span>
+      </nav>
+      <div class="top-actions">
+        <button class="icon-btn" id="btn-settings" title="Paramètres" aria-label="Paramètres"><svg><use href="#i-gear"/></svg></button>
+        <button class="icon-btn danger" id="btn-quit" title="Quitter l'application" aria-label="Quitter"><svg><use href="#i-power"/></svg></button>
+      </div>
     </header>
 
-    <!-- Main Container -->
-    <main class="app-main">
-        <!-- 1. Drop Zone (Hidden once manga is loaded) -->
-        <section id="upload-section" class="panel upload-panel">
-            <!-- Subtle Ambient Backdrop -->
-            <div id="slowmo-ambient-stage" class="slowmo-ambient-stage" aria-hidden="true">
-                <div class="manga-vibration-grid" id="manga-vibration-grid"></div>
-                <div class="manga-speedlines" id="manga-speedlines"></div>
-                <div id="slowmo-halo" class="slowmo-halo"></div>
+    <main class="views">
+      <!-- ============ TRADUIRE ============ -->
+      <section class="view active" id="view-translate">
+        <!-- Étape 1 : déposer -->
+        <div class="empty" id="empty-state">
+          <div class="drop" id="drop-zone" tabindex="0">
+            <div class="drop-glow" aria-hidden="true"></div>
+            <div class="drop-icon"><svg><use href="#i-upload"/></svg></div>
+            <h1>Déposez un chapitre ici</h1>
+            <p>Archive CBZ, CBR, ZIP, RAR, une image ou un dossier d'images</p>
+            <div class="drop-actions">
+              <button class="btn primary" id="btn-pick-file"><svg><use href="#i-file"/></svg>Choisir un fichier</button>
+              <button class="btn ghost" id="btn-pick-folder"><svg><use href="#i-folder"/></svg>Choisir un dossier</button>
+            </div>
+            <input type="file" id="file-input" accept=".cbz,.cbr,.zip,.rar,.jpg,.jpeg,.png,.webp" hidden>
+            <input type="file" id="folder-input" webkitdirectory directory multiple hidden>
+          </div>
+          <div class="engine-hint" id="engine-hint"></div>
+          <ol class="steps-row">
+            <li><b>1</b><span>Déposez votre chapitre</span></li>
+            <li><b>2</b><span>Choisissez la langue</span></li>
+            <li><b>3</b><span>Regardez la traduction se faire</span></li>
+          </ol>
+        </div>
+
+        <!-- Étape 2 : studio -->
+        <div class="studio hidden" id="studio">
+          <div class="toolbar">
+            <div class="file-chip"><svg><use href="#i-file"/></svg><span id="file-name">-</span><small id="file-pages"></small></div>
+            <div class="lang-pick">
+              <select id="src-lang" aria-label="Langue d'origine"></select>
+              <button class="icon-btn sm" id="btn-swap-lang" title="Inverser" aria-label="Inverser les langues"><svg><use href="#i-swap"/></svg></button>
+              <select id="tgt-lang" aria-label="Langue de traduction"></select>
+            </div>
+            <div class="toolbar-actions">
+              <button class="btn ghost sm" id="btn-new">Nouveau</button>
+              <button class="btn primary" id="btn-translate">Traduire</button>
+              <button class="btn ghost hidden" id="btn-cancel">Arrêter</button>
+              <a class="btn success hidden" id="btn-download"><svg><use href="#i-down"/></svg>Télécharger</a>
+            </div>
+          </div>
+
+          <div class="progress hidden" id="progress">
+            <div class="progress-bar"><span id="progress-fill"></span></div>
+            <div class="progress-text"><span id="progress-label">Préparation</span><span id="progress-count"></span></div>
+          </div>
+
+          <div class="workspace">
+            <aside class="pages" id="page-list" aria-label="Pages"></aside>
+
+            <div class="stage-wrap">
+              <div class="stage-head">
+                <div class="seg" id="view-mode">
+                  <button class="active" data-mode="translated">Traduit</button>
+                  <button data-mode="original">Original</button>
+                </div>
+                <div class="live-badge hidden" id="live-badge"><span class="dot"></span><span id="live-text">En direct</span></div>
+                <label class="switch" title="Afficher automatiquement la page en cours de traduction">
+                  <input type="checkbox" id="follow-live" checked><span></span>Suivre
+                </label>
+              </div>
+
+              <div class="stage" id="stage">
+                <button class="nav-arrow left" id="btn-prev" aria-label="Page précédente"><svg><use href="#i-left"/></svg></button>
+                <div class="canvas" id="canvas">
+                  <img id="img-base" alt="Page" draggable="false">
+                  <img id="img-top" alt="" draggable="false" aria-hidden="true">
+                  <div class="overlay" id="overlay"></div>
+                  <div class="scanline" id="scanline"></div>
+                </div>
+                <button class="nav-arrow right" id="btn-next" aria-label="Page suivante"><svg><use href="#i-right"/></svg></button>
+                <div class="stage-step" id="stage-step">
+                  <span data-s="detect">Repérage des bulles</span>
+                  <span data-s="clean">Effacement</span>
+                  <span data-s="write">Réécriture</span>
+                </div>
+              </div>
+              <div class="page-indicator"><span id="page-indicator">Page 1</span><span class="hint">Maintenez l'image pour voir l'original</span></div>
             </div>
 
-            <div id="drop-zone" class="drop-zone">
-                <input type="file" id="file-input" accept=".cbz,.cbr,.rar,.zip,.png,.jpg,.jpeg,.webp" class="file-input-hidden">
-                <input type="file" id="folder-input" webkitdirectory directory multiple class="file-input-hidden">
-                <div class="drop-illustration">
-                    <div class="manga-hero-icon-wrap">
-                        <svg class="manga-hero-svg" width="80" height="80" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <defs>
-                                <linearGradient id="hero-grad-primary" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-                                    <stop offset="0%" stop-color="#4f46e5"/>
-                                    <stop offset="100%" stop-color="#9333ea"/>
-                                </linearGradient>
-                                <linearGradient id="hero-grad-glow" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-                                    <stop offset="0%" stop-color="#38bdf8"/>
-                                    <stop offset="100%" stop-color="#818cf8"/>
-                                </linearGradient>
-                            </defs>
-                            <!-- Manga Book Opened -->
-                            <path d="M6 16C14 13 24 14 32 18C40 14 50 13 58 16V50C50 47 40 48 32 52C24 48 14 47 6 50V16Z" fill="url(#hero-grad-primary)" fill-opacity="0.14" stroke="url(#hero-grad-primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                            <line x1="32" y1="18" x2="32" y2="52" stroke="url(#hero-grad-primary)" stroke-width="2.5" stroke-linecap="round"/>
-                            <!-- Page details -->
-                            <rect x="11" y="22" width="16" height="11" rx="2" stroke="url(#hero-grad-glow)" stroke-width="1.5" stroke-dasharray="3 2"/>
-                            <rect x="11" y="36" width="16" height="9" rx="2" stroke="url(#hero-grad-glow)" stroke-width="1.5"/>
-                            <rect x="37" y="22" width="16" height="15" rx="2" stroke="url(#hero-grad-glow)" stroke-width="1.5"/>
-                            <rect x="37" y="40" width="16" height="5" rx="1.5" stroke="url(#hero-grad-glow)" stroke-width="1.5" stroke-dasharray="2 2"/>
-                            <!-- Sparkle -->
-                            <path d="M52 10L53.5 14.5L58 16L53.5 17.5L52 22L50.5 17.5L46 16L50.5 14.5L52 10Z" fill="#38bdf8"/>
-                        </svg>
-                    </div>
-                </div>
-                <h2>Glissez-déposez votre Manga ici</h2>
-                <p>Importez vos chapitres complets ou pages individuelles en un clic</p>
+            <aside class="bubbles" id="bubbles-panel">
+              <div class="panel-head">
+                <h3>Textes de la page</h3>
+                <button class="btn ghost sm hidden" id="btn-apply-edits">Appliquer</button>
+              </div>
+              <div class="bubble-list" id="bubble-list"><p class="muted">Les textes détectés apparaîtront ici.</p></div>
+            </aside>
+          </div>
+        </div>
+      </section>
 
-                <div class="upload-buttons-row">
-                    <button type="button" id="btn-browse-files" class="btn btn-primary btn-lg">
-                        📄 Parcourir un Fichier
-                    </button>
-                    <button type="button" id="btn-browse-folder" class="btn btn-secondary btn-lg">
-                        📁 Importer un Dossier
-                    </button>
-                </div>
+      <!-- ============ BIBLIOTHÈQUE ============ -->
+      <section class="view" id="view-library">
+        <div class="page-head">
+          <h2>Bibliothèque</h2>
+          <p class="muted">Tous vos chapitres traduits, prêts à être téléchargés.</p>
+        </div>
+        <div class="library" id="library-list"></div>
+      </section>
 
-                <div class="format-cards">
-                    <div class="format-card"><span class="fmt-ext">CBZ / ZIP</span><span class="fmt-desc">Archive standard</span></div>
-                    <div class="format-card"><span class="fmt-ext">CBR / RAR</span><span class="fmt-desc">Extraction native</span></div>
-                    <div class="format-card"><span class="fmt-ext">DOSSIER</span><span class="fmt-desc">Chapitre complet</span></div>
-                    <div class="format-card"><span class="fmt-ext">PNG / JPG / WEBP</span><span class="fmt-desc">Page unitaire</span></div>
-                </div>
-
-                <div class="features-row">
-                    <span>⚡ Zéro modèle local (< 50 Mo RAM)</span>
-                    <span>🌐 Traduction Cloud Vision</span>
-                    <span>🔒 Restitution au format exact</span>
-                </div>
-            </div>
-        </section>
-
-        <!-- 2. Workspace View (Reader, Progress, Controls) -->
-        <section id="workspace-section" class="workspace-section hidden">
-            <!-- Top Controls Bar -->
-            <div class="workspace-topbar">
-                <!-- Block 1: File & Info -->
-                <div class="topbar-block topbar-file-block">
-                    <div class="file-badge">
-                        <span id="badge-filename" class="filename">manga.cbz</span>
-                        <span id="badge-pages" class="page-count">0 pages</span>
-                    </div>
-                </div>
-
-                <!-- Block 2: Quick Language Selector -->
-                <div class="topbar-block topbar-lang-block">
-                    <div class="quick-lang-selector" role="group" aria-label="Langues de traduction">
-                        <select id="quick-src-lang" class="form-select form-select-sm" title="Langue source">
-                            <option value="Japanese" selected>🇯🇵 Japonais</option>
-                            <option value="English">🇬🇧 Anglais</option>
-                            <option value="Korean">🇰🇷 Coréen</option>
-                            <option value="Chinese">🇨🇳 Chinois</option>
-                            <option value="Auto">🌐 Auto</option>
-                        </select>
-                        <span class="lang-arrow" aria-hidden="true">➜</span>
-                        <select id="quick-tgt-lang" class="form-select form-select-sm" title="Langue cible">
-                            <option value="French" selected>🇫🇷 Français</option>
-                            <option value="English">🇬🇧 Anglais</option>
-                            <option value="Spanish">🇪🇸 Espagnol</option>
-                            <option value="German">🇩🇪 Allemand</option>
-                            <option value="Italian">🇮🇹 Italien</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Block 3: View Modes -->
-                <div class="topbar-block topbar-views-block">
-                    <div class="view-toggle-group" role="group" aria-label="Modes d'affichage">
-                        <button id="view-mode-split" class="btn-toggle active" title="Vue Comparateur Côte à Côte (Touche 1)" aria-label="Mode Comparateur">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></svg>
-                            Comparateur
-                        </button>
-                        <button id="view-mode-single" class="btn-toggle" title="Vue Liseuse Seule (Touche 2)" aria-label="Mode Liseuse">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-                            Liseuse
-                        </button>
-                        <button id="view-mode-slider" class="btn-toggle" title="Vue Slider Avant/Après (Touche 3)" aria-label="Mode Slider">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><polyline points="9 9 6 12 9 15"/><polyline points="15 9 18 12 15 15"/></svg>
-                            Slider
-                        </button>
-                        <button id="view-mode-webtoon" class="btn-toggle" title="Mode Webtoon Scroll Vertical Continu (Touche 4)" aria-label="Mode Webtoon">
-                            📜 Webtoon
-                        </button>
-                        <div class="slider-toggle-wrap hidden" id="version-toggle-wrap">
-                            <span class="label-opt">Original</span>
-                            <label class="switch" aria-label="Basculer entre page originale et traduite">
-                                <input type="checkbox" id="chk-show-translated" checked>
-                                <span class="slider-round"></span>
-                            </label>
-                            <span class="label-opt highlight">Traduit</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Block 4: Zoom & Direction Tools -->
-                <div class="topbar-block topbar-tools-block">
-                    <div class="zoom-tools-group" role="group" aria-label="Outils de zoom et lecture">
-                        <button id="btn-reading-dir" class="btn btn-secondary btn-sm" aria-label="Sens de lecture Manga ou Occidental" title="Basculer Sens Manga (Droite → Gauche) / Occidental (Gauche → Droite) (Touche R)">🇯🇵 RTL ←</button>
-                        <button id="btn-zoom-out" class="btn btn-icon btn-sm" aria-label="Zoom arrière" title="Zoom arrière">−</button>
-                        <span id="lbl-zoom-level" class="zoom-label" title="Niveau de zoom">100%</span>
-                        <button id="btn-zoom-in" class="btn btn-icon btn-sm" aria-label="Zoom avant" title="Zoom avant">+</button>
-                        <button id="btn-zoom-fit" class="btn btn-secondary btn-sm" aria-label="Ajuster l'image" title="Basculer Ajuster Hauteur / Largeur">Ajuster</button>
-                        <button id="btn-fullscreen" class="btn btn-icon btn-sm" aria-label="Plein écran (Touche F)" title="Plein écran (Touche F)">⛶</button>
-                    </div>
-                </div>
-
-                <!-- Block 5: Actions -->
-                <div class="topbar-block topbar-actions-block">
-                    <div class="action-buttons-group">
-                        <button id="btn-new-manga" class="btn btn-secondary btn-sm" title="Charger un autre manga" aria-label="Charger un nouveau manga">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                            Nouveau
-                        </button>
-                        <button id="btn-toggle-bubbles" class="btn btn-secondary btn-sm" title="Ouvrir l'éditeur de bulles en direct (< 50 ms)" aria-label="Ouvrir l'éditeur de bulles détectées">
-                            💬 Bulles (<span id="lbl-bubbles-count">0</span>)
-                        </button>
-                        <button id="btn-retranslate-page" class="btn btn-secondary btn-sm" title="Retraduire uniquement la page affichée" aria-label="Retraduire cette page">
-                            🔄 Retraduire
-                        </button>
-                        <button id="btn-start-translation" class="btn btn-accent btn-sm btn-pulse" aria-label="Lancer la traduction du chapitre">
-                            <span class="btn-icon" aria-hidden="true">⚡</span> Traduire
-                        </button>
-                        <button id="btn-download" class="btn btn-success btn-sm hidden" aria-label="Télécharger le manga traduit">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            <span id="lbl-download">Télécharger CBZ</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Progress Banner (shows when translating) -->
-            <div id="progress-banner" class="progress-banner hidden">
-                <div class="progress-info">
-                    <div class="spinner-manga" aria-hidden="true"></div>
-                    <div class="progress-labels">
-                        <div class="progress-title-row">
-                            <span class="progress-title" id="progress-title">Traduction en cours...</span>
-                            <span class="progress-stats" id="progress-stats">✓ 0 traduites · ✗ 0 erreur</span>
-                            <span class="progress-eta" id="progress-eta">Temps estimé : calcul...</span>
-                        </div>
-                        <div class="progress-log" id="progress-log">Initialisation...</div>
-                        <div class="progress-live-feed" id="progress-live-feed" style="font-size: 11px; color: var(--primary); margin-top: 4px; font-weight: 600;">⚡ En attente du flux LLM...</div>
-                    </div>
-                    <div class="progress-percent" id="progress-percent">0%</div>
-                    <button id="btn-cancel-translation" class="btn btn-danger btn-sm" aria-label="Annuler la traduction en cours">
-                        ✕ Annuler
-                    </button>
-                </div>
-                <div class="progress-track">
-                    <div id="progress-fill" class="progress-fill" style="width: 0%;"></div>
-                </div>
-            </div>
-
-            <!-- Main Interactive Reader Area -->
-            <div class="reader-area" id="reader-area">
-                <button id="btn-prev-page" class="nav-arrow nav-prev" aria-label="Page précédente" title="Page précédente (←)">‹</button>
-                
-                <div class="reader-stage" id="reader-stage">
-                    <!-- Original Image Column -->
-                    <div class="image-column" id="col-original">
-                        <div class="column-header">Original (<span id="lbl-src-lang">Japonais</span>)</div>
-                        <div class="image-wrapper">
-                            <img id="img-original" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Page Originale">
-                        </div>
-                    </div>
-
-                    <!-- Translated Image Column -->
-                    <div class="image-column" id="col-translated">
-                        <div class="column-header">Traduction (<span id="lbl-tgt-lang">Français</span>)</div>
-                        <div class="image-wrapper">
-                            <img id="img-translated" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Page Traduite">
-                            <!-- Overlay loading patience animation with Cyber-Scanner Laser FX & Radar -->
-                            <div id="page-loader" class="page-loader hidden">
-                                <div class="cyber-scanline" aria-hidden="true"></div>
-                                <div class="cyber-scan-glow" aria-hidden="true"></div>
-                                <div class="pulse-bubble" id="slowmo-pulse-bubble">
-                                    <div class="spinner-dots">
-                                        <span></span><span></span><span></span>
-                                    </div>
-                                    <p>Analyse Cloud Vision...</p>
-                                    <small class="slowmo-hint">Déplacez la souris · Flux lent actif ✨</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Interactive Slider Comparison Container (3rd mode) -->
-                    <div class="slider-compare-container hidden" id="slider-compare-container">
-                        <div class="column-header">Comparateur Interactif (Glisser le curseur Avant / Après)</div>
-                        <div class="slider-stage" id="slider-stage">
-                            <img id="slider-img-trans" class="slider-img-base" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Page Traduite">
-                            <img id="slider-img-orig" class="slider-img-overlay" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Page Originale">
-                            <div id="slider-handle" class="slider-handle" role="slider" aria-label="Curseur de comparaison Avant/Après" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0">
-                                <div class="slider-line"></div>
-                                <div class="slider-knob">‹ ›</div>
-                            </div>
-                            <span class="slider-tag tag-left">Original</span>
-                            <span class="slider-tag tag-right">Traduit</span>
-                        </div>
-                    </div>
-
-                    <!-- Webtoon Continuous Vertical Scroll Container (4th mode) -->
-                    <div class="webtoon-scroll-container hidden" id="webtoon-scroll-container" aria-label="Liseuse Webtoon à défilement vertical continu">
-                    </div>
-                </div>
-
-                <button id="btn-next-page" class="nav-arrow nav-next" aria-label="Page suivante" title="Page suivante (→)">›</button>
-
-                <!-- Collapsible Live Bubble Editor Drawer -->
-                <aside id="bubble-editor-panel" class="bubble-editor-panel hidden" aria-label="Éditeur de bulles détectées">
-                    <div class="bubble-editor-header">
-                        <h3>💬 Bulles détectées</h3>
-                        <button id="btn-close-bubbles" class="btn-close btn-sm" aria-label="Fermer l'éditeur de bulles">&times;</button>
-                    </div>
-                    <div id="bubble-editor-list" class="bubble-editor-list">
-                        <p class="box-hint">Aucune bulle détectée sur cette page pour le moment.</p>
-                    </div>
-                    <div class="bubble-editor-footer">
-                        <button id="btn-apply-bubbles" class="btn btn-primary btn-block" aria-label="Appliquer les modifications de bulles">
-                            ✓ Appliquer à la page (&lt; 50 ms)
-                        </button>
-                    </div>
-                </aside>
-            </div>
-
-            <!-- Bottom Thumbnails Strip -->
-            <div class="thumbnail-strip-wrap">
-                <div class="strip-header">
-                    <span>Navigation par page (<span id="strip-counter">1 / 1</span>) • Raccourcis : <code>←/→</code> Pages · <code>1/2/3</code> Vues · <code>F</code> Plein écran</span>
-                    <span class="status-legend">
-                        <span><span class="dot dot-done"></span> Traduit</span>
-                        <span><span class="dot dot-proc"></span> En cours</span>
-                        <span><span class="dot dot-err"></span> Erreur</span>
-                        <span><span class="dot dot-pend"></span> En attente</span>
-                    </span>
-                </div>
-                <div class="thumbnail-strip" id="thumbnail-strip">
-                    <!-- Thumbnails dynamically populated -->
-                </div>
-            </div>
-        </section>
+      <!-- ============ GUIDE ============ -->
+      <section class="view" id="view-guide">
+        <div class="guide">
+          <nav class="guide-nav" id="guide-nav">
+            <a href="#g-start" class="active">Bien démarrer</a>
+            <a href="#g-key">Obtenir une clé gratuite</a>
+            <a href="#g-live">La traduction en direct</a>
+            <a href="#g-edit">Corriger un texte</a>
+            <a href="#g-style">Apparence du texte</a>
+            <a href="#g-files">Fichiers acceptés</a>
+            <a href="#g-quit">Fermer l'application</a>
+            <a href="#g-faq">Questions fréquentes</a>
+          </nav>
+          <article class="guide-body">
+            <section id="g-start">
+              <h2>Bien démarrer</h2>
+              <p>Manga Translator Studio traduit vos chapitres de manga directement dans les bulles, en conservant le dessin d'origine.</p>
+              <ol class="guide-steps">
+                <li><b>Connectez un service de traduction</b><span>Ouvrez les Paramètres, onglet « Service de traduction », et collez votre clé. Une seule fois suffit.</span></li>
+                <li><b>Déposez votre chapitre</b><span>Glissez le fichier dans la fenêtre ou utilisez « Choisir un fichier ».</span></li>
+                <li><b>Choisissez les langues puis cliquez sur Traduire</b><span>Les pages se traduisent une à une et vous pouvez les lire immédiatement.</span></li>
+                <li><b>Téléchargez le résultat</b><span>Le chapitre traduit est enregistré dans le même format que l'original et rangé dans la Bibliothèque.</span></li>
+              </ol>
+            </section>
+            <section id="g-key">
+              <h2>Obtenir une clé gratuite</h2>
+              <p>L'application utilise un service en ligne pour lire et traduire les bulles. La solution la plus simple est Google Gemini, gratuit pour un usage personnel.</p>
+              <ol class="guide-steps">
+                <li><b>Rendez-vous sur Google AI Studio</b><span><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> et connectez-vous avec votre compte Google.</span></li>
+                <li><b>Cliquez sur « Create API key »</b><span>Copiez la clé affichée.</span></li>
+                <li><b>Collez-la dans l'application</b><span>Paramètres, Service de traduction, Google Gemini, puis « Connecter ». Choisissez un modèle dans la liste et validez.</span></li>
+              </ol>
+              <p class="note">Votre clé reste sur votre ordinateur. Elle n'est envoyée qu'au service que vous avez choisi.</p>
+            </section>
+            <section id="g-live">
+              <h2>La traduction en direct</h2>
+              <p>Pendant la traduction, la page en cours s'affiche avec ses trois étapes :</p>
+              <ul class="guide-list">
+                <li><b>Repérage des bulles</b> : chaque zone de texte est entourée.</li>
+                <li><b>Effacement</b> : le texte d'origine disparaît des bulles.</li>
+                <li><b>Réécriture</b> : la traduction est placée dans chaque bulle.</li>
+              </ul>
+              <p>Désactivez « Suivre » pour rester sur une page pendant que les autres se traduisent. Maintenez l'image appuyée pour comparer avec l'original.</p>
+            </section>
+            <section id="g-edit">
+              <h2>Corriger un texte</h2>
+              <p>Le panneau « Textes de la page » liste chaque bulle avec sa traduction. Modifiez une phrase puis cliquez sur « Appliquer » : la page est redessinée en un instant, sans nouvelle traduction.</p>
+            </section>
+            <section id="g-style">
+              <h2>Apparence du texte</h2>
+              <p>Dans les Paramètres, onglet « Apparence », vous pouvez choisir la police, la couleur, une taille fixe ou automatique, et la manière dont les bulles sont nettoyées. Le réglage « Automatique » convient à la plupart des mangas.</p>
+            </section>
+            <section id="g-files">
+              <h2>Fichiers acceptés</h2>
+              <p>CBZ, CBR, ZIP, RAR, images JPG, PNG, WEBP, ou un dossier contenant des images. Le fichier traduit est rendu dans le même format.</p>
+            </section>
+            <section id="g-quit">
+              <h2>Fermer l'application</h2>
+              <p>Fermez simplement la fenêtre, ou cliquez sur le bouton d'arrêt en haut à droite. Rien ne reste actif en arrière-plan.</p>
+            </section>
+            <section id="g-faq">
+              <h2>Questions fréquentes</h2>
+              <details><summary>Une page reste en erreur</summary><p>Le service a refusé la demande (limite gratuite atteinte ou clé invalide). Attendez quelques minutes, ou cliquez sur la page puis « Retraduire la page ».</p></details>
+              <details><summary>La traduction est lente</summary><p>La vitesse dépend du service choisi. Les modèles marqués « rapide » dans la liste sont recommandés.</p></details>
+              <details><summary>Le texte déborde de la bulle</summary><p>Corrigez la phrase pour la raccourcir, ou laissez la taille sur « Automatique » dans l'onglet Apparence.</p></details>
+              <details><summary>Est-ce que mes fichiers sont envoyés sur Internet ?</summary><p>Seules les images des pages sont envoyées au service de traduction choisi. Les fichiers restent sur votre appareil.</p></details>
+            </section>
+          </article>
+        </div>
+      </section>
     </main>
+  </div>
 
-    <!-- Settings Modal Drawer -->
-    <div id="settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-settings-title">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-settings-title">⚙️ Configuration & Fournisseurs d'IA</h2>
-                <button id="btn-close-settings" class="btn-close" aria-label="Fermer la fenêtre de configuration">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="tabs-nav" role="tablist">
-                    <button class="tab-btn active" data-tab="tab-api" role="tab">Fournisseurs & Modèles</button>
-                    <button class="tab-btn" data-tab="tab-lang" role="tab">Langues & Traduction</button>
-                    <button class="tab-btn" data-tab="tab-style" role="tab">Style & Bulles</button>
-                    <button class="tab-btn" data-tab="tab-system" role="tab">Système & Arrêt</button>
-                </div>
-
-                <!-- Tab 1: API Providers & Model Selection -->
-                <div id="tab-api" class="tab-pane active">
-                    <div class="form-group">
-                        <label for="cfg-provider">Fournisseur d'IA :</label>
-                        <select id="cfg-provider" class="form-select">
-                            <option value="gemini">Google Gemini (Officiel - 1500 req/jour gratuites)</option>
-                            <option value="openrouter">OpenRouter (Multi-modèles gratuits & payants)</option>
-                            <option value="openai">OpenAI (GPT-4o, GPT-4o-mini)</option>
-                            <option value="groq">Groq Cloud (Llama 3.2 Vision ultra-rapide)</option>
-                            <option value="mistral">Mistral AI (Pixtral 12B / Large)</option>
-                            <option value="nvidia">NVIDIA NIM (Nemotron VL, Llama 3.2 Vision)</option>
-                            <option value="custom">Endpoint Personnalisé (Ollama, vLLM, API compatible)</option>
-                            <option value="auto">Auto (Gemini en priorité, replis automatiques)</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="cfg-model-select">Modèle de Vision :</label>
-                        <select id="cfg-model-select" class="form-select">
-                            <!-- Populated dynamically based on chosen provider -->
-                        </select>
-                        <input type="text" id="cfg-model-custom" class="form-input hidden" style="margin-top: 8px;" placeholder="Tapez le nom exact du modèle (ex: gpt-4o, llama3.2-vision)...">
-                    </div>
-
-                    <div class="form-group" id="group-base-url" style="display: none;">
-                        <label for="cfg-base-url">URL de Base de l'API (Remplie automatiquement) :</label>
-                        <input type="text" id="cfg-base-url" class="form-input" placeholder="https://api.example.com/v1">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="cfg-api-key" id="lbl-api-key">Clé d'API du Fournisseur :</label>
-                        <input type="password" id="cfg-api-key" class="form-input" placeholder="Votre clé API...">
-                    </div>
-
-                    <!-- Groq Refine Box -->
-                    <div class="provider-box" style="margin-top: 14px;">
-                        <div class="box-title">Raffinement de texte via Groq (Optionnel)</div>
-                        <p class="box-hint">Polit et harmonise le français parlé en style manga via <a href="https://groq.com" target="_blank" rel="noopener">groq.com</a>.</p>
-                        <div class="form-group">
-                            <label for="cfg-groq-key">Clé d'API Groq (GROQ_API_KEY) :</label>
-                            <input type="password" id="cfg-groq-key" class="form-input" placeholder="Votre clé API Groq...">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tab 2: Languages -->
-                <div id="tab-lang" class="tab-pane">
-                    <div class="form-row">
-                        <div class="form-group col-half">
-                            <label for="cfg-src-lang">Langue Source :</label>
-                            <select id="cfg-src-lang" class="form-select">
-                                <option value="Japanese" selected>Japonais (日本語)</option>
-                                <option value="English">Anglais (English)</option>
-                                <option value="Korean">Coréen (한국어)</option>
-                                <option value="Chinese">Chinois (中文)</option>
-                                <option value="Auto">Détection Automatique</option>
-                            </select>
-                        </div>
-                        <div class="form-group col-half">
-                            <label for="cfg-tgt-lang">Langue Cible :</label>
-                            <select id="cfg-tgt-lang" class="form-select">
-                                <option value="French" selected>Français (Naturel)</option>
-                                <option value="English">Anglais (English)</option>
-                                <option value="Spanish">Espagnol (Español)</option>
-                                <option value="German">Allemand (Deutsch)</option>
-                                <option value="Italian">Italien (Italiano)</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tab 3: Style & Typesetting -->
-                <div id="tab-style" class="tab-pane">
-                    <div class="form-group">
-                        <label for="cfg-font-style">Style de Police :</label>
-                        <select id="cfg-font-style" class="form-select">
-                            <option value="bold" selected>Anime Manga Bold (Recommandé)</option>
-                            <option value="comic">Comic Style</option>
-                            <option value="sans">Moderne Sans-Serif</option>
-                            <option value="serif">Classique Serif</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="cfg-font-size">Dimensionnement du Texte :</label>
-                        <div class="range-wrap">
-                            <input type="range" id="cfg-font-size" min="0" max="32" value="0" class="form-range">
-                            <span id="lbl-font-size">Auto-Fit (Adaptation automatique)</span>
-                        </div>
-                        <p class="box-hint">0 = Calcul automatique optimal selon la taille de chaque bulle.</p>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group col-half">
-                            <label for="cfg-mask-style">Forme du Masque de Bulle :</label>
-                            <select id="cfg-mask-style" class="form-select">
-                                <option value="smart" selected>✨ Intelligent (Contours préservés &amp; bulles sombres)</option>
-                                <option value="rounded">Rectangle Arrondi Doux</option>
-                                <option value="ellipse">Ovale / Ellipse</option>
-                                <option value="rectangle">Rectangle plein</option>
-                                <option value="transparent">Transparent (Contour blanc)</option>
-                            </select>
-                        </div>
-                        <div class="form-group col-half">
-                            <label for="cfg-text-color">Couleur du Texte :</label>
-                            <input type="color" id="cfg-text-color" value="#000000" class="form-color">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tab 4: System, Server Status & Shutdown -->
-                <div id="tab-system" class="tab-pane">
-                    <div class="provider-box" style="margin-bottom: 16px;">
-                        <div class="box-title">📊 Statut du Serveur Local</div>
-                        <p class="box-hint" style="margin-bottom: 8px;">Serveur local FastAPI 100% Cloud Vision (Port 8000).</p>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
-                            <span class="status-pill pill-ok">🟢 En ligne (127.0.0.1:8000)</span>
-                            <span class="status-pill" style="border-color: rgba(56, 189, 248, 0.4); color: #38bdf8;">RAM &lt; 50 Mo</span>
-                            <span class="status-pill" id="tab-system-version-pill" style="border-color: rgba(16, 185, 129, 0.4); color: var(--success);">v2.1.0</span>
-                        </div>
-                        <button type="button" id="btn-check-update-system" class="btn btn-secondary btn-sm">
-                            🔄 Vérifier les mises à jour GitHub
-                        </button>
-                    </div>
-
-                    <div class="provider-box" style="border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.05);">
-                        <div class="box-title" style="color: var(--danger);">🛑 Arrêt du Serveur (PC / Mobile / Android)</div>
-                        <p class="box-hint" style="margin-bottom: 12px; line-height: 1.4;">
-                            Éteint proprement le serveur local pour libérer le port 8000 et économiser votre batterie (idéal lorsque vous avez terminé votre lecture sur PC ou sur smartphone/tablette).
-                        </p>
-                        <button type="button" id="btn-open-shutdown-confirm" class="btn btn-danger">
-                            🛑 Éteindre le Serveur Local
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="btn-save-settings" class="btn btn-primary">Enregistrer les Paramètres</button>
-            </div>
+  <!-- ============ PARAMÈTRES ============ -->
+  <div class="modal" id="settings" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card" role="dialog" aria-labelledby="settings-title">
+      <div class="modal-head">
+        <h2 id="settings-title">Paramètres</h2>
+        <button class="icon-btn" data-close aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
+      </div>
+      <div class="settings-tabs" id="settings-tabs">
+        <button class="active" data-stab="engine">Service de traduction</button>
+        <button data-stab="lang">Langues</button>
+        <button data-stab="look">Apparence</button>
+      </div>
+      <div class="modal-body">
+        <div class="stab active" id="stab-engine">
+          <div class="current-engine" id="current-engine"></div>
+          <p class="muted small">Choisissez un service, collez votre clé, puis sélectionnez un modèle.</p>
+          <div class="providers" id="providers"></div>
         </div>
-    </div>
 
-    <!-- History Modal Drawer -->
-    <div id="history-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-history-title">
-        <div class="modal-content" style="max-width: 680px;">
-            <div class="modal-header">
-                <h2 id="modal-history-title">📜 Historique des Mangas Traduits</h2>
-                <button id="btn-close-history" class="btn-close" aria-label="Fermer l'historique">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div id="history-list" class="history-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow-y: auto;">
-                    <p class="box-hint">Chargement de l'historique...</p>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="btn-close-history-footer" class="btn btn-secondary">Fermer</button>
-            </div>
+        <div class="stab" id="stab-lang">
+          <div class="field">
+            <label for="set-src">Langue d'origine par défaut</label>
+            <select id="set-src"></select>
+          </div>
+          <div class="field">
+            <label for="set-tgt">Langue de traduction par défaut</label>
+            <select id="set-tgt"></select>
+          </div>
         </div>
-    </div>
 
-    <!-- Permanent Library Modal -->
-    <div id="library-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-library-title">
-        <div class="modal-content" style="max-width: 680px;">
-            <div class="modal-header">
-                <h2 id="modal-library-title">📚 Bibliothèque Permanente (data/output)</h2>
-                <button id="btn-close-library" class="btn-close" aria-label="Fermer la bibliothèque">&times;</button>
+        <div class="stab" id="stab-look">
+          <div class="field">
+            <label>Police</label>
+            <div class="choice-grid" id="font-choices">
+              <button data-v="bold" class="font-bold">Manga</button>
+              <button data-v="comic" class="font-comic">Bande dessinée</button>
+              <button data-v="sans" class="font-sans">Moderne</button>
+              <button data-v="serif" class="font-serif">Classique</button>
             </div>
-            <div class="modal-body">
-                <p class="box-hint" style="margin-bottom: 12px;">Mangas traduits conservés indéfiniment sur votre machine :</p>
-                <div id="library-list" class="history-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow-y: auto;">
-                    <p class="box-hint">Chargement de la bibliothèque...</p>
-                </div>
+          </div>
+          <div class="field">
+            <label>Taille du texte</label>
+            <div class="row">
+              <div class="seg" id="size-mode"><button data-v="auto" class="active">Automatique</button><button data-v="fixed">Fixe</button></div>
+              <input type="range" id="font-size" min="10" max="48" value="20" disabled>
+              <output id="font-size-out">Auto</output>
             </div>
-            <div class="modal-footer">
-                <button id="btn-close-library-footer" class="btn btn-secondary">Fermer</button>
+          </div>
+          <div class="field">
+            <label>Nettoyage des bulles</label>
+            <div class="choice-grid" id="mask-choices">
+              <button data-v="smart">Automatique</button>
+              <button data-v="rounded">Arrondi</button>
+              <button data-v="ellipse">Ovale</button>
+              <button data-v="rectangle">Rectangle</button>
+              <button data-v="transparent">Sans fond</button>
             </div>
+          </div>
+          <div class="field">
+            <label for="text-color">Couleur du texte</label>
+            <div class="row"><input type="color" id="text-color" value="#000000"><span class="muted small">Le mode automatique passe en blanc sur les fonds sombres.</span></div>
+          </div>
         </div>
+      </div>
+      <div class="modal-foot">
+        <span class="save-state" id="save-state"></span>
+        <button class="btn primary" id="btn-save-settings">Enregistrer</button>
+      </div>
     </div>
+  </div>
 
-    <!-- Help & Keyboard Shortcuts Modal -->
-    <div id="help-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-help-title">
-        <div class="modal-content" style="max-width: 640px;">
-            <div class="modal-header">
-                <h2 id="modal-help-title">⌨️ Guide Rapide & Raccourcis Clavier</h2>
-                <button id="btn-close-help" class="btn-close" aria-label="Fermer l'aide">&times;</button>
-            </div>
-            <div class="modal-body">
-                <h3 class="section-title">Navigation & Vues</h3>
-                <div class="shortcuts-container">
-                    <div class="shortcut-row">
-                        <span class="shortcut-desc">Page précédente / suivante (RTL Manga inversé)</span>
-                        <div class="shortcut-keys"><kbd>←</kbd> <kbd>→</kbd></div>
-                    </div>
-                    <div class="shortcut-row">
-                        <span class="shortcut-desc">Modes d'affichage : Comparateur / Liseuse / Slider / Webtoon</span>
-                        <div class="shortcut-keys"><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></div>
-                    </div>
-                    <div class="shortcut-row">
-                        <span class="shortcut-desc">Sens de lecture (🇯🇵 Droite ➜ Gauche / 🌍 Gauche ➜ Droite)</span>
-                        <div class="shortcut-keys"><kbd>R</kbd></div>
-                    </div>
-                    <div class="shortcut-row">
-                        <span class="shortcut-desc">Activer / Désactiver le Plein écran</span>
-                        <div class="shortcut-keys"><kbd>F</kbd></div>
-                    </div>
-                    <div class="shortcut-row">
-                        <span class="shortcut-desc">Zoom continu au curseur</span>
-                        <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Molette</kbd></div>
-                    </div>
-                    <div class="shortcut-row">
-                        <span class="shortcut-desc">Fermer les modales et panneaux</span>
-                        <div class="shortcut-keys"><kbd>Esc</kbd></div>
-                    </div>
-                </div>
-
-                <h3 class="section-title" style="margin-top: 18px;">Fonctionnalités Clés</h3>
-                <div class="help-cards-grid">
-                    <div class="help-card">
-                        <div class="help-card-icon">💬</div>
-                        <div class="help-card-content">
-                            <strong>Éditeur de bulles en direct</strong>
-                            <p>Modifiez et réalignez n'importe quelle réplique instantanément (&lt; 50 ms).</p>
-                        </div>
-                    </div>
-                    <div class="help-card">
-                        <div class="help-card-icon">🔄</div>
-                        <div class="help-card-content">
-                            <strong>Retraduction par page</strong>
-                            <p>Affinez une page individuelle sans relancer l'ensemble du chapitre.</p>
-                        </div>
-                    </div>
-                    <div class="help-card">
-                        <div class="help-card-icon">⚡</div>
-                        <div class="help-card-content">
-                            <strong>100% Cloud Vision</strong>
-                            <p>Zéro modèle lourd en local : consommation mémoire &lt; 50 Mo de RAM.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="btn-close-help-footer" class="btn btn-primary">Fermer (Échap)</button>
-            </div>
-        </div>
+  <!-- Confirmation quitter -->
+  <div class="modal small" id="quit-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card" role="dialog">
+      <div class="modal-head"><h2>Quitter l'application ?</h2></div>
+      <div class="modal-body"><p class="muted">L'application sera complètement fermée. Les traductions terminées restent dans la Bibliothèque.</p></div>
+      <div class="modal-foot">
+        <button class="btn ghost" data-close>Annuler</button>
+        <button class="btn danger" id="btn-quit-confirm">Quitter</button>
+      </div>
     </div>
+  </div>
 
-    <!-- Shutdown Confirmation Modal (PC & Mobile) -->
-    <div id="shutdown-confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-shutdown-title">
-        <div class="modal-content" style="max-width: 440px; text-align: center;">
-            <div class="modal-header" style="justify-content: center;">
-                <h2 id="modal-shutdown-title" style="color: var(--danger);">🛑 Arrêter le serveur ?</h2>
-            </div>
-            <div class="modal-body" style="padding: 18px 8px;">
-                <p style="font-size: 14px; color: var(--text-primary); line-height: 1.5; margin-bottom: 10px;">
-                    Voulez-vous vraiment éteindre le serveur local de Manga Translator Studio ?
-                </p>
-                <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
-                    Vos mangas traduits et votre historique restent intacts dans votre dossier local <code>data/</code>.
-                </p>
-            </div>
-            <div class="modal-footer" style="justify-content: center; gap: 12px;">
-                <button type="button" id="btn-cancel-shutdown" class="btn btn-secondary">Annuler</button>
-                <button type="button" id="btn-confirm-shutdown" class="btn btn-danger">Oui, éteindre le serveur</button>
-            </div>
-        </div>
-    </div>
+  <div class="closed-screen hidden" id="closed-screen">
+    <div><h2>Application fermée</h2><p class="muted">Vous pouvez fermer cet onglet.</p></div>
+  </div>
 
-    <!-- Fullscreen Shutdown Final Screen -->
-    <div id="shutdown-screen" class="shutdown-screen hidden">
-        <div class="shutdown-card">
-            <div class="shutdown-icon" aria-hidden="true">🛑</div>
-            <h2>Serveur local arrêté</h2>
-            <p>Le serveur Manga Translator Studio a été éteint proprement.</p>
-            <p class="shutdown-hint">Vous pouvez fermer cet onglet en toute sécurité.</p>
-            <div class="shutdown-actions">
-                <button type="button" onclick="location.reload()" class="btn btn-secondary btn-sm">🔄 Reconnecter si relancé</button>
-            </div>
-        </div>
-    </div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
 
-    <!-- Toast Container -->
-    <div id="toast-container" class="toast-container" aria-live="polite"></div>
-
-    <!-- Script -->
-    <script src="/static/js/app.js"></script>
-    <script src="/static/js/animations.js"></script>
+  <script src="/static/js/app.js?v=3"></script>
 </body>
 </html>

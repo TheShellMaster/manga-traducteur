@@ -3,11 +3,23 @@ import os
 import re
 from pathlib import Path
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
-ENV_PATH = ROOT_DIR / ".env"
+import sys
+
+APP_DIR = Path(__file__).resolve().parent
+ROOT_DIR = APP_DIR.parent
+# Writable user folder: project folder in dev, ~/MangaTranslatorStudio once installed (frozen build)
+if os.environ.get("MTS_HOME"):
+    USER_DIR = Path(os.environ["MTS_HOME"]).expanduser()
+elif getattr(sys, "frozen", False):
+    USER_DIR = Path.home() / "MangaTranslatorStudio"
+else:
+    USER_DIR = ROOT_DIR
+USER_DIR.mkdir(parents=True, exist_ok=True)
+ENV_PATH = USER_DIR / ".env"
+BUNDLED_FONTS_DIR = APP_DIR / "fonts"
 HOME_ENV_PATH = Path.home() / ".env"
 OPENCODE_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
-FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+FONT_PATH = str(APP_DIR / "fonts" / "DejaVuSans-Bold.ttf")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
 

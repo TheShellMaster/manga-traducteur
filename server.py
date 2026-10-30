@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 
-from app.config import load_env, save_env_key, PROVIDER_PRESETS
+from app.config import load_env, save_env_key, PROVIDER_PRESETS, USER_DIR
 from app.archives import ArchiveHandler, ArchiveItem
 from app.cloud_vision import CloudVisionClient
 from app.typesetter import render_manga_page
@@ -46,7 +46,7 @@ app.add_middleware(
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "web" / "static"
 TEMPLATES_DIR = BASE_DIR / "web" / "templates"
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = USER_DIR / "data"
 SESSIONS_DIR = DATA_DIR / "sessions"
 OUTPUT_DIR = DATA_DIR / "output"
 CACHE_DIR = DATA_DIR / "cache"
@@ -59,7 +59,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # In-memory session tracking
 sessions: Dict[str, Dict[str, Any]] = {}
-HISTORY_FILE = BASE_DIR / "history" / "sessions.json"
+HISTORY_FILE = USER_DIR / "history" / "sessions.json"
 
 
 def _record_session_history(session: Dict[str, Any], model_name: str = "Cloud Vision"):
@@ -253,6 +253,81 @@ def shutdown_system_server():
     }
 
 
+_last_heartbeat = {"t": 0.0}
+
+
+@app.post("/api/system/heartbeat")
+def system_heartbeat():
+    """Called periodically by the UI. In desktop mode (MTS_AUTO_EXIT=1), the server
+    stops by itself when no window has been open for a while."""
+    _last_heartbeat["t"] = time.time()
+    return {"status": "ok"}
+
+
+def _auto_exit_watchdog():
+    import signal
+    grace = float(os.environ.get("MTS_AUTO_EXIT_DELAY", "40"))
+    start = time.time()
+    while True:
+        time.sleep(5)
+        last = _last_heartbeat["t"]
+        busy = any(s.get("status") == "translating" for s in sessions.values())
+        ref = last or start
+        limit = grace if last else 180
+        if not busy and time.time() - ref > limit:
+            print("[System] Plus aucune fenêtre ouverte : arrêt du serveur.")
+            os.kill(os.getpid(), signal.SIGTERM)
+            return
+
+
+if os.environ.get("MTS_AUTO_EXIT") == "1":
+    threading.Thread(target=_auto_exit_watchdog, daemon=True).start()
+
+
+@app.post("/api/models/test")
+async def test_provider_model(payload: Dict[str, Any]):
+    """Real minimal inference call to verify that a key + model actually work."""
+    import httpx
+
+    provider = str(payload.get("provider") or "").lower()
+    model = str(payload.get("model") or "").strip()
+    load_env()
+    api_key = str(payload.get("api_key") or "").strip() or os.environ.get(f"{provider.upper()}_API_KEY", "")
+    base_url = str(payload.get("base_url") or "").strip()
+    if not model:
+        return {"ok": False, "error": "Aucun modèle sélectionné."}
+    if not api_key and provider != "custom":
+        return {"ok": False, "error": "Clé API manquante."}
+    t0 = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            if provider == "gemini":
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+                resp = await client.post(url, json={"contents": [{"parts": [{"text": "Reply with: OK"}]}]})
+            else:
+                url_base = base_url or PROVIDER_PRESETS.get(provider, {}).get("base_url") or ""
+                if not url_base:
+                    return {"ok": False, "error": "Adresse du service manquante."}
+                headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+                resp = await client.post(
+                    url_base.rstrip("/") + "/chat/completions",
+                    headers=headers,
+                    json={"model": model, "max_tokens": 5, "messages": [{"role": "user", "content": "Reply with: OK"}]},
+                )
+        ms = round((time.perf_counter() - t0) * 1000)
+        if resp.status_code == 200:
+            return {"ok": True, "latency_ms": ms}
+        detail = resp.text[:200]
+        try:
+            j = resp.json()
+            detail = (j.get("error") or {}).get("message") if isinstance(j.get("error"), dict) else (j.get("error") or detail)
+        except Exception:
+            pass
+        return {"ok": False, "error": f"HTTP {resp.status_code} : {detail}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+
 @app.get("/api/session/{session_id}")
 def get_session_data(session_id: str):
     session = sessions.get(session_id)
@@ -298,6 +373,10 @@ def get_settings():
         "text_color": os.environ.get("TEXT_COLOR", "#000000"),
         "mask_style": os.environ.get("MASK_STYLE", "smart"),
         "presets": PROVIDER_PRESETS,
+        "configured": {
+            p: bool(os.environ.get(f"{p.upper()}_API_KEY"))
+            for p in ("gemini", "openrouter", "groq", "openai", "mistral", "nvidia", "custom")
+        },
     }
 
 
@@ -372,7 +451,7 @@ async def fetch_provider_models_api(payload: Dict[str, Any]):
                         if has_img:
                             name = m.get("name") or mid
                             if is_free:
-                                free_list.append({"id": mid, "label": f"✨ {name} (Gratuit)", "is_free": True})
+                                free_list.append({"id": mid, "label": f"{name} (gratuit)", "is_free": True})
                             elif any(k in mid for k in ("gpt-4o", "claude-3.5", "qwen", "gemini", "llama-3.2", "mistral")):
                                 paid_list.append({"id": mid, "label": f"{name}", "is_free": False})
                     # Prioritize free vision models at the top
@@ -614,7 +693,10 @@ def _translate_single_page(
     item = session["image_items"][idx]
     total = session["total_pages"]
 
-    session["pages"][idx]["status"] = "processing"
+    page = session["pages"][idx]
+    page["status"] = "processing"
+    page["stage"] = "detect"
+    page["blocks"] = []
     img = item.get_image()
 
     raw_img_bytes = None
@@ -649,6 +731,15 @@ def _translate_single_page(
             )
             _save_cached_page_blocks(raw_img_bytes, tgt_lang, blocks, model_name)
 
+        # Live view: expose detected bubbles, then the cleaned page, before final typesetting
+        page["blocks"] = _serialize_blocks(blocks)
+        page["blocks_count"] = len(page["blocks"])
+        page["stage"] = "clean"
+        cleaned = render_manga_page(img=img.copy(), blocks=blocks, mask_style=mask_style, mask_only=True)
+        cleaned.convert("RGB").save(pages_dir / f"page_{idx:03d}_clean.jpg", format="JPEG", quality=85)
+        cleaned.close()
+        page["stage"] = "write"
+
         rendered = render_manga_page(
             img=img,
             blocks=blocks,
@@ -666,9 +757,10 @@ def _translate_single_page(
 
         ser_blocks = _serialize_blocks(blocks)
         session["pages"][idx]["status"] = "done"
+        session["pages"][idx]["stage"] = "done"
         session["pages"][idx]["blocks_count"] = len(ser_blocks)
         session["pages"][idx]["blocks"] = ser_blocks
-        session["current_log"] = f"Page {idx + 1}/{total} terminée ({len(ser_blocks)} bulles via {model_name}{' ⚡cache' if is_cached else ''})"
+        session["current_log"] = f"Page {idx + 1}/{total} terminée ({len(ser_blocks)} bulles via {model_name}{' - cache' if is_cached else ''})"
         gc.collect()
         return {"status": "done", "blocks_count": len(ser_blocks), "blocks": ser_blocks, "model": model_name}
     except Exception as e:
@@ -678,6 +770,8 @@ def _translate_single_page(
         img.close()
         session["translated_images"][item.relative_name] = fallback_path
         session["pages"][idx]["status"] = "error"
+        session["pages"][idx]["stage"] = "error"
+        session["pages"][idx]["error"] = str(e)[:300]
         session["current_log"] = f"Page {idx + 1} : Erreur ({str(e)}), page originale conservée"
         gc.collect()
         return {"status": "error", "error": str(e)}
@@ -791,14 +885,19 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
                             "translation": trans_snippet,
                             "model": last_model,
                         }
-                        session["current_log"] = f"[{last_model}] Page {p_idx + 1}/{total} : « {orig_snippet} » ➜ « {trans_snippet} » ({completed_count}/{total} terminées)"
+                        session["current_log"] = f"[{last_model}] Page {p_idx + 1}/{total} : « {orig_snippet} » -> « {trans_snippet} » ({completed_count}/{total} terminées)"
             except Exception as e:
                 completed_count += 1
                 session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
 
     session["status"] = "finished"
     session["progress_percent"] = 100
-    session["current_log"] = f"Traduction terminée avec succès via {last_model} !"
+    n_err = sum(1 for p in session["pages"][:total] if p.get("status") == "error")
+    session["errors_count"] = n_err
+    session["current_log"] = (
+        f"Traduction terminée via {last_model}." if n_err == 0
+        else f"Traduction terminée : {n_err} page(s) en erreur sur {total}."
+    )
 
     # Automatically save translated archive into permanent data/output/
     try:
@@ -984,6 +1083,7 @@ def get_session_status(session_id: str):
         "progress_percent": session["progress_percent"],
         "current_log": session["current_log"],
         "last_bubble": session.get("last_bubble"),
+        "errors_count": session.get("errors_count", 0),
         "pages": session["pages"],
     }
 
@@ -995,7 +1095,7 @@ def get_page_image(session_id: str, version: str, page_idx: int):
         raise HTTPException(status_code=404, detail="Session introuvable")
 
     pages_dir = Path(session["session_dir"]) / "pages"
-    suffix = "trans" if version == "translated" else "orig"
+    suffix = {"translated": "trans", "clean": "clean"}.get(version, "orig")
     img_file = pages_dir / f"page_{page_idx:03d}_{suffix}.jpg"
 
     if not img_file.exists():

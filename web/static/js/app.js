@@ -1,1557 +1,801 @@
-let currentSession = null;
-let currentPageIndex = 0;
-let pollInterval = null;
-let viewMode = 'split'; // 'split', 'single', 'slider', or 'webtoon'
-let zoomLevel = 100;
-let fitWidthMode = false;
-let isRtlMode = false; // Reading direction: false = LTR, true = RTL (Manga)
-let translationStartTime = null;
+/* Manga Translator Studio - interface */
+(() => {
+  "use strict";
 
-// DOM Elements
-const dropZone = document.getElementById('drop-zone');
-const fileInput = document.getElementById('file-input');
-const folderInput = document.getElementById('folder-input');
-const uploadSection = document.getElementById('upload-section');
-const workspaceSection = document.getElementById('workspace-section');
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-const badgeFilename = document.getElementById('badge-filename');
-const badgePages = document.getElementById('badge-pages');
-const imgOriginal = document.getElementById('img-original');
-const imgTranslated = document.getElementById('img-translated');
-const colOriginal = document.getElementById('col-original');
-const colTranslated = document.getElementById('col-translated');
-const pageLoader = document.getElementById('page-loader');
+  const LANGS = [
+    ["Japanese", "Japonais"], ["Korean", "Coréen"], ["Chinese", "Chinois"], ["English", "Anglais"],
+    ["French", "Français"], ["Spanish", "Espagnol"], ["German", "Allemand"], ["Italian", "Italien"],
+    ["Portuguese", "Portugais"], ["Russian", "Russe"], ["Arabic", "Arabe"], ["Vietnamese", "Vietnamien"],
+    ["Thai", "Thaï"], ["Indonesian", "Indonésien"],
+  ];
 
-const sliderCompareContainer = document.getElementById('slider-compare-container');
-const sliderStage = document.getElementById('slider-stage');
-const sliderImgOrig = document.getElementById('slider-img-orig');
-const sliderImgTrans = document.getElementById('slider-img-trans');
-const sliderHandle = document.getElementById('slider-handle');
+  const PROVIDERS = [
+    { id: "gemini", name: "Google Gemini", desc: "Gratuit pour un usage personnel. Idéal pour débuter.", color: "#4f7cff", letter: "G", rec: true, keyUrl: "https://aistudio.google.com/apikey" },
+    { id: "openrouter", name: "OpenRouter", desc: "Accès à de nombreux modèles, dont certains gratuits.", color: "#7c5cff", letter: "O", keyUrl: "https://openrouter.ai/keys" },
+    { id: "groq", name: "Groq", desc: "Très rapide. Sert aussi à rendre les phrases plus naturelles.", color: "#f55036", letter: "Q", keyUrl: "https://console.groq.com/keys" },
+    { id: "openai", name: "OpenAI", desc: "Service payant, très bonne qualité.", color: "#10a37f", letter: "A", keyUrl: "https://platform.openai.com/api-keys" },
+    { id: "mistral", name: "Mistral AI", desc: "Service européen, payant.", color: "#ff7000", letter: "M", keyUrl: "https://console.mistral.ai/api-keys" },
+    { id: "nvidia", name: "NVIDIA", desc: "Modèles hébergés par NVIDIA.", color: "#76b900", letter: "N", keyUrl: "https://build.nvidia.com" },
+    { id: "custom", name: "Service personnalisé", desc: "Pour utilisateurs avancés : toute adresse compatible.", color: "#5b6275", letter: "+", custom: true },
+  ];
+  const providerName = (id) => (PROVIDERS.find((p) => p.id === id) || {}).name || id;
 
-const readerArea = document.getElementById('reader-area');
-const readerStage = document.getElementById('reader-stage');
-const btnPrev = document.getElementById('btn-prev-page');
-const btnNext = document.getElementById('btn-next-page');
-const stripCounter = document.getElementById('strip-counter');
-const thumbnailStrip = document.getElementById('thumbnail-strip');
+  const state = {
+    settings: {},
+    sid: null,
+    pages: [],
+    total: 0,
+    cur: 0,
+    mode: "translated",
+    follow: true,
+    status: "idle",
+    poll: null,
+    ver: {},          // cache-busting per page
+    animated: new Set(),
+    anim: null,       // page index being animated
+    detectShown: null,
+    dirty: false,
+  };
 
-const btnStart = document.getElementById('btn-start-translation');
-const btnRetranslatePage = document.getElementById('btn-retranslate-page');
-const btnCancelTranslation = document.getElementById('btn-cancel-translation');
-const btnDownload = document.getElementById('btn-download');
-const lblDownload = document.getElementById('lbl-download');
-
-const progressBanner = document.getElementById('progress-banner');
-const progressTitle = document.getElementById('progress-title');
-const progressStats = document.getElementById('progress-stats');
-const progressEta = document.getElementById('progress-eta');
-const progressLog = document.getElementById('progress-log');
-const progressPercent = document.getElementById('progress-percent');
-const progressFill = document.getElementById('progress-fill');
-
-const viewSplit = document.getElementById('view-mode-split');
-const viewSingle = document.getElementById('view-mode-single');
-const viewSlider = document.getElementById('view-mode-slider');
-const viewWebtoon = document.getElementById('view-mode-webtoon');
-const webtoonScrollContainer = document.getElementById('webtoon-scroll-container');
-const btnReadingDir = document.getElementById('btn-reading-dir');
-const chkShowTranslated = document.getElementById('chk-show-translated');
-const versionToggleWrap = document.getElementById('version-toggle-wrap');
-
-// Settings modal elements
-const btnOpenSettings = document.getElementById('btn-open-settings');
-const btnCloseSettings = document.getElementById('btn-close-settings');
-const settingsModal = document.getElementById('settings-modal');
-const btnSaveSettings = document.getElementById('btn-save-settings');
-const btnThemeToggle = document.getElementById('btn-theme-toggle');
-const themeIcon = document.getElementById('theme-icon');
-
-// Toast notification system
-function showToast(message, type = 'info', duration = 4000) {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
-    const toast = document.createElement('div');
-    const icon = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' }[type] || 'ℹ️';
-    toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<span>${icon}</span><span>${message}</span><button class="toast-close" aria-label="Fermer la notification" onclick="this.parentElement.classList.add('toast-out'); setTimeout(() => this.parentElement.remove(), 300)">×</button>`;
-    container.appendChild(toast);
-    setTimeout(() => {
-        toast.classList.add('toast-out');
-        setTimeout(() => toast.remove(), 300);
-    }, duration);
-}
-
-// Badge status helpers (including error status)
-function getBadgeClass(status) {
-    if (status === 'done') return 'badge-done';
-    if (status === 'processing') return 'badge-proc';
-    if (status === 'error') return 'badge-err';
-    return 'badge-pend';
-}
-
-function getBadgeText(status, idx) {
-    if (status === 'done') return '✓';
-    if (status === 'processing') return '⚡';
-    if (status === 'error') return '✗';
-    return `${idx + 1}`;
-}
-
-function updateDownloadButtonLabel(fmt) {
-    if (!lblDownload) return;
-    const f = (fmt || 'cbz').toLowerCase();
-    if (f === 'rar' || f === 'cbr') {
-        lblDownload.textContent = 'Télécharger CBR/RAR';
-    } else if (f === 'image') {
-        lblDownload.textContent = 'Télécharger Image';
-    } else {
-        lblDownload.textContent = 'Télécharger CBZ';
+  /* ---------------- API ---------------- */
+  async function api(path, opts = {}) {
+    const init = { ...opts };
+    if (opts.json !== undefined) {
+      init.method = init.method || "POST";
+      init.headers = { "Content-Type": "application/json" };
+      init.body = JSON.stringify(opts.json);
     }
-}
+    const r = await fetch(path, init);
+    let data = null;
+    try { data = await r.json(); } catch { /* ignore */ }
+    if (!r.ok) throw new Error((data && data.detail) || `Erreur ${r.status}`);
+    return data;
+  }
 
-let providerPresets = {};
+  /* ---------------- Toasts ---------------- */
+  function toast(msg, type = "") {
+    const el = document.createElement("div");
+    el.className = `toast ${type}`;
+    el.textContent = msg;
+    $("#toasts").appendChild(el);
+    const kill = () => { el.classList.add("out"); setTimeout(() => el.remove(), 320); };
+    setTimeout(kill, type === "err" ? 6000 : 3500);
+    el.addEventListener("click", kill);
+  }
 
-function getProviderOptionsPayload() {
-    const provider = document.getElementById('cfg-provider').value;
-    const apiKey = document.getElementById('cfg-api-key').value.trim();
-    const baseUrl = document.getElementById('cfg-base-url').value.trim();
+  /* ---------------- Navigation ---------------- */
+  function moveIndicator() {
+    const a = $(".tab.active"), ind = $("#tab-indicator");
+    if (!a) return;
+    ind.style.width = a.offsetWidth + "px";
+    ind.style.transform = `translateX(${a.offsetLeft - 4}px)`;
+  }
+  function go(view) {
+    $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.nav === view));
+    $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${view}`));
+    moveIndicator();
+    if (view === "library") loadLibrary();
+    history.replaceState(null, "", `#${view}`);
+  }
 
-    const modelSelect = document.getElementById('cfg-model-select');
-    let model = modelSelect ? modelSelect.value : '';
-    if (model === '__custom__') {
-        const customInput = document.getElementById('cfg-model-custom');
-        model = customInput ? customInput.value.trim() : '';
-    }
+  /* ---------------- Settings ---------------- */
+  function fillLangs(sel, value) {
+    sel.innerHTML = LANGS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+    sel.value = value;
+  }
 
-    const qSrc = document.getElementById('quick-src-lang');
-    const qTgt = document.getElementById('quick-tgt-lang');
-    const srcLang = (qSrc ? qSrc.value : '') || document.getElementById('cfg-src-lang').value;
-    const tgtLang = (qTgt ? qTgt.value : '') || document.getElementById('cfg-tgt-lang').value;
-
-    return {
-        provider,
-        api_key: apiKey,
-        base_url: baseUrl,
-        model: model,
-        src_lang: srcLang,
-        tgt_lang: tgtLang,
-        font_style: document.getElementById('cfg-font-style').value,
-        fixed_font_size: parseInt(document.getElementById('cfg-font-size').value, 10) || 0,
-        text_color: document.getElementById('cfg-text-color').value,
-        mask_style: document.getElementById('cfg-mask-style').value,
-    };
-}
-
-// Initial setup
-document.addEventListener('DOMContentLoaded', () => {
-    initTheme();
-    initDragAndDrop();
-    initSettings();
-    initHistory();
-    initLibrary();
-    initHelpModal();
-    initShutdownControl();
-    initNavigation();
-    initViewModes();
-    initSliderCompare();
-    initZoomAndFullscreen();
-    initSlowMotionMouseEngine();
-    checkSystemUpdate();
-    restoreActiveSessionOnLoad();
-
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/static/sw.js').catch(err => console.debug('SW reg failed:', err));
-        });
-    }
-});
-
-// Theme Toggle (Light / Dark) stored in localStorage
-function initTheme() {
-    const saved = localStorage.getItem('manga_theme') || 'dark';
-    applyTheme(saved);
-    if (btnThemeToggle) {
-        btnThemeToggle.addEventListener('click', () => {
-            const current = document.body.classList.contains('light-theme') ? 'light' : 'dark';
-            const next = current === 'dark' ? 'light' : 'dark';
-            localStorage.setItem('manga_theme', next);
-            applyTheme(next);
-        });
-    }
-}
-
-function applyTheme(theme) {
-    if (theme === 'light') {
-        document.body.classList.remove('dark-theme');
-        document.body.classList.add('light-theme');
-        if (themeIcon) themeIcon.textContent = '☀️';
-    } else {
-        document.body.classList.remove('light-theme');
-        document.body.classList.add('dark-theme');
-        if (themeIcon) themeIcon.textContent = '🌙';
-    }
-}
-
-// Drag & Drop + File & Folder Uploads
-function initDragAndDrop() {
-    ['dragenter', 'dragover'].forEach(name => {
-        dropZone.addEventListener(name, (e) => {
-            e.preventDefault();
-            dropZone.classList.add('dragover');
-        });
-    });
-
-    dropZone.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-        const files = e.dataTransfer.files;
-        if (files.length > 1) {
-            handleFolderUpload(files);
-        } else if (files.length === 1) {
-            handleFileUpload(files[0]);
-        }
-    });
-
-    bindUploadInputs();
-}
-
-function bindUploadInputs() {
-    const fInput = document.getElementById('file-input');
-    if (fInput) {
-        fInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) handleFileUpload(e.target.files[0]);
-        });
-    }
-    const dInput = document.getElementById('folder-input');
-    if (dInput) {
-        dInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) handleFolderUpload(e.target.files);
-        });
-    }
-    const btnFiles = document.getElementById('btn-browse-files');
-    if (btnFiles && fInput) {
-        btnFiles.addEventListener('click', () => fInput.click());
-    }
-    const btnFolder = document.getElementById('btn-browse-folder');
-    if (btnFolder && dInput) {
-        btnFolder.addEventListener('click', () => dInput.click());
-    }
-}
-
-function getDropZoneDefaultHTML() {
-    return `
-        <input type="file" id="file-input" accept=".cbz,.cbr,.rar,.zip,.png,.jpg,.jpeg,.webp" class="file-input-hidden">
-        <input type="file" id="folder-input" webkitdirectory directory multiple class="file-input-hidden">
-        <div class="drop-illustration"><div class="manga-icon-animated" aria-hidden="true">📖</div></div>
-        <h2>Glissez-déposez votre Manga ici</h2>
-        <p>Importez vos chapitres complets ou pages individuelles en un clic</p>
-        <div class="upload-buttons-row">
-            <button type="button" id="btn-browse-files" class="btn btn-primary btn-lg">📄 Parcourir un Fichier</button>
-            <button type="button" id="btn-browse-folder" class="btn btn-secondary btn-lg">📁 Importer un Dossier</button>
-        </div>
-        <div class="format-cards">
-            <div class="format-card"><span class="fmt-ext">CBZ / ZIP</span><span class="fmt-desc">Archive standard</span></div>
-            <div class="format-card"><span class="fmt-ext">CBR / RAR</span><span class="fmt-desc">Extraction native</span></div>
-            <div class="format-card"><span class="fmt-ext">DOSSIER</span><span class="fmt-desc">Chapitre complet</span></div>
-            <div class="format-card"><span class="fmt-ext">PNG / JPG / WEBP</span><span class="fmt-desc">Page unitaire</span></div>
-        </div>
-        <div class="features-row">
-            <span>⚡ Zéro modèle local (< 50 Mo RAM)</span>
-            <span>🌐 Traduction Cloud Vision</span>
-            <span>🔒 Restitution au format exact</span>
-        </div>
-    `;
-}
-
-function activateSessionWorkspace(data) {
-    currentSession = data;
-    currentPageIndex = 0;
-
+  async function loadSettings() {
     try {
-        localStorage.setItem('active_manga_session', data.session_id);
-    } catch (e) {}
-
-    uploadSection.classList.add('hidden');
-    workspaceSection.classList.remove('hidden');
-
-    badgeFilename.textContent = data.filename;
-    badgePages.textContent = `${data.total_pages} page${data.total_pages > 1 ? 's' : ''}`;
-    updateDownloadButtonLabel(data.format);
-
-    renderThumbnails();
-    renderWebtoonPages();
-    loadPage(0);
-}
-
-async function handleFileUpload(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    dropZone.innerHTML = `
-        <div class="spinner-manga" style="margin: 0 auto 16px auto; width: 40px; height: 40px;"></div>
-        <h2>Décompression et indexation de ${file.name}...</h2>
-        <p>Veuillez patienter quelques instants</p>
-    `;
-
-    try {
-        const res = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData,
-        });
-
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || "Erreur de chargement");
-        }
-
-        const data = await res.json();
-        activateSessionWorkspace(data);
-        showToast(`Manga "${data.filename}" chargé (${data.total_pages} pages)`, 'success');
+      state.settings = await api("/api/settings");
     } catch (e) {
-        dropZone.innerHTML = getDropZoneDefaultHTML();
-        bindUploadInputs();
-        showToast("Erreur lors de l'envoi : " + e.message, 'error');
+      toast("Impossible de charger les paramètres.", "err");
+      return;
     }
-}
+    const s = state.settings;
+    fillLangs($("#src-lang"), s.src_lang || "Japanese");
+    fillLangs($("#tgt-lang"), s.tgt_lang || "French");
+    fillLangs($("#set-src"), s.src_lang || "Japanese");
+    fillLangs($("#set-tgt"), s.tgt_lang || "French");
+    setChoice("#font-choices", s.font_style || "bold");
+    setChoice("#mask-choices", s.mask_style || "smart");
+    $("#text-color").value = s.text_color || "#000000";
+    const fixed = Number(s.fixed_font_size) || 0;
+    setSizeMode(fixed > 0 ? "fixed" : "auto", fixed || 20);
+    renderEngineSummary();
+    renderProviders();
+  }
 
-async function handleFolderUpload(fileList) {
-    const formData = new FormData();
-    for (let i = 0; i < fileList.length; i++) {
-        const f = fileList[i];
-        const relPath = f.webkitRelativePath || f.name;
-        formData.append('files', f, relPath);
-    }
+  function engineReady() {
+    const s = state.settings;
+    return s.provider && s.provider !== "auto" && s.selected_model && (s.configured?.[s.provider] || s.provider === "custom");
+  }
 
-    dropZone.innerHTML = `
-        <div class="spinner-manga" style="margin: 0 auto 16px auto; width: 40px; height: 40px;"></div>
-        <h2>Importation du dossier (${fileList.length} fichiers)...</h2>
-        <p>Tri naturel et extraction des pages</p>
-    `;
+  function renderEngineSummary() {
+    const s = state.settings;
+    const ok = engineReady();
+    const box = $("#current-engine");
+    box.className = "current-engine" + (ok ? " ok" : "");
+    box.innerHTML = ok
+      ? `<span class="dot"></span><div>Service actif : <b>${esc(providerName(s.provider))}</b><br><small class="muted">${esc(s.selected_model)}</small></div>`
+      : `<span class="dot"></span><div><b>Aucun service configuré</b><br><small class="muted">Choisissez un service ci-dessous pour commencer.</small></div>`;
+    $("#engine-hint").innerHTML = ok
+      ? `Service : <span class="pill">${esc(providerName(s.provider))}</span>`
+      : `<span class="pill warn">Aucun service de traduction connecté</span><button class="btn ghost sm" id="hint-setup">Configurer</button>`;
+    const b = $("#hint-setup");
+    if (b) b.onclick = () => openSettings("engine");
+  }
 
-    try {
-        const res = await fetch('/api/upload_folder', {
-            method: 'POST',
-            body: formData,
-        });
-
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || "Erreur de chargement du dossier");
-        }
-
-        const data = await res.json();
-        activateSessionWorkspace(data);
-        showToast(`Dossier "${data.filename}" importé (${data.total_pages} pages)`, 'success');
-    } catch (e) {
-        dropZone.innerHTML = getDropZoneDefaultHTML();
-        bindUploadInputs();
-        showToast("Erreur lors de l'import du dossier : " + e.message, 'error');
-    }
-}
-
-// Navigation & Reader
-function initNavigation() {
-    btnPrev.addEventListener('click', () => {
-        if (currentPageIndex > 0) loadPage(currentPageIndex - 1);
-    });
-
-    btnNext.addEventListener('click', () => {
-        if (currentSession && currentPageIndex < currentSession.total_pages - 1) {
-            loadPage(currentPageIndex + 1);
-        }
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (workspaceSection.classList.contains('hidden')) return;
-        const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
-        if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
-
-        if (e.key === 'ArrowLeft') {
-            isRtlMode ? btnNext.click() : btnPrev.click();
-        } else if (e.key === 'ArrowRight') {
-            isRtlMode ? btnPrev.click() : btnNext.click();
-        } else if (e.key === '1') viewSplit.click();
-        else if (e.key === '2') viewSingle.click();
-        else if (e.key === '3' && viewSlider) viewSlider.click();
-        else if (e.key === '4' && viewWebtoon) viewWebtoon.click();
-        else if ((e.key === 'r' || e.key === 'R') && btnReadingDir) btnReadingDir.click();
-        else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
-    });
-
-    if (btnReadingDir) {
-        btnReadingDir.addEventListener('click', () => {
-            isRtlMode = !isRtlMode;
-            btnReadingDir.textContent = isRtlMode ? '🇯🇵 RTL ←' : '🌍 LTR →';
-            btnReadingDir.classList.toggle('active', isRtlMode);
-            if (readerStage) readerStage.classList.toggle('rtl-mode', isRtlMode);
-            showToast(
-                isRtlMode
-                    ? 'Sens de lecture Manga activé (Droite → Gauche)'
-                    : 'Sens de lecture Occidental activé (Gauche → Droite)',
-                'info',
-                2500
-            );
-        });
-    }
-
-    // Reset button (Nouveau manga)
-    const btnNewManga = document.getElementById('btn-new-manga');
-    if (btnNewManga) {
-        btnNewManga.addEventListener('click', () => {
-            if (pollInterval) clearInterval(pollInterval);
-            try {
-                localStorage.removeItem('active_manga_session');
-            } catch (e) {}
-            currentSession = null;
-            currentPageIndex = 0;
-            uploadSection.classList.remove('hidden');
-            workspaceSection.classList.add('hidden');
-            progressBanner.classList.add('hidden');
-            btnStart.classList.remove('hidden');
-            btnDownload.classList.add('hidden');
-            dropZone.innerHTML = getDropZoneDefaultHTML();
-            bindUploadInputs();
-            showToast('Prêt pour un nouveau manga !', 'info');
-        });
-    }
-
-    // Quick Language Selector synchronization
-    const qSrc = document.getElementById('quick-src-lang');
-    const qTgt = document.getElementById('quick-tgt-lang');
-    const cSrc = document.getElementById('cfg-src-lang');
-    const cTgt = document.getElementById('cfg-tgt-lang');
-    const lblSrc = document.getElementById('lbl-src-lang');
-    const lblTgt = document.getElementById('lbl-tgt-lang');
-
-    if (qSrc && cSrc) {
-        qSrc.addEventListener('change', () => {
-            cSrc.value = qSrc.value;
-            if (lblSrc) lblSrc.textContent = qSrc.options[qSrc.selectedIndex].text.replace(/^[^\s]+\s*/, '');
-            showToast(`Langue source : ${qSrc.value}`, 'info', 2000);
-        });
-    }
-    if (qTgt && cTgt) {
-        qTgt.addEventListener('change', () => {
-            cTgt.value = qTgt.value;
-            if (lblTgt) lblTgt.textContent = qTgt.options[qTgt.selectedIndex].text.replace(/^[^\s]+\s*/, '');
-            showToast(`Langue cible : ${qTgt.value}`, 'info', 2000);
-        });
-    }
-
-    // Retranslate current page button
-    if (btnRetranslatePage) {
-        btnRetranslatePage.addEventListener('click', async () => {
-            if (!currentSession) return;
-            const idx = currentPageIndex;
-            btnRetranslatePage.disabled = true;
-            pageLoader.classList.remove('hidden');
-            showToast(`Retraduction de la page ${idx + 1} lancée...`, 'info');
-
-            try {
-                const opts = getProviderOptionsPayload();
-                const res = await fetch(`/api/translate/page/${currentSession.session_id}/${idx}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(opts),
-                });
-                const data = await res.json();
-                if (!res.ok || data.status === 'error') {
-                    currentSession.pages[idx].status = 'error';
-                    updateThumbnailBadge(idx, 'error');
-                    showToast(`Échec page ${idx + 1} : ${data.error || 'Erreur API'}`, 'error');
-                } else {
-                    currentSession.pages[idx].status = 'done';
-                    currentSession.pages[idx].blocks = data.blocks || [];
-                    updateThumbnailBadge(idx, 'done');
-                    showToast(`Page ${idx + 1} retraduite (${data.blocks_count} bulles)`, 'success');
-                }
-                loadPage(idx);
-            } catch (err) {
-                showToast(`Erreur retraduction : ${err.message}`, 'error');
-            } finally {
-                pageLoader.classList.add('hidden');
-                btnRetranslatePage.disabled = false;
-            }
-        });
-    }
-
-    // Live Bubble Editor controls
-    const btnToggleBubbles = document.getElementById('btn-toggle-bubbles');
-    const btnCloseBubbles = document.getElementById('btn-close-bubbles');
-    const btnApplyBubbles = document.getElementById('btn-apply-bubbles');
-    const bubblePanel = document.getElementById('bubble-editor-panel');
-
-    if (btnToggleBubbles && bubblePanel) {
-        btnToggleBubbles.addEventListener('click', () => {
-            bubblePanel.classList.toggle('hidden');
-            if (!bubblePanel.classList.contains('hidden')) {
-                renderBubbleEditor(currentPageIndex);
-            }
-        });
-    }
-    if (btnCloseBubbles && bubblePanel) {
-        btnCloseBubbles.addEventListener('click', () => {
-            bubblePanel.classList.add('hidden');
-        });
-    }
-    if (btnApplyBubbles) {
-        btnApplyBubbles.addEventListener('click', async () => {
-            if (!currentSession) return;
-            const page = currentSession.pages[currentPageIndex];
-            const blocks = (page && page.blocks) ? page.blocks : [];
-            if (!blocks.length) {
-                showToast("Aucune bulle à mettre à jour sur cette page", "info");
-                return;
-            }
-            const updatedBlocks = blocks.map((b, i) => {
-                const ta = document.getElementById(`bubble-edit-ta-${i}`);
-                const newText = ta ? ta.value.trim() : (b.fr || b.translation || '');
-                return {
-                    ...b,
-                    fr: newText,
-                    translation: newText,
-                };
-            });
-            btnApplyBubbles.disabled = true;
-            try {
-                const opts = getProviderOptionsPayload();
-                const res = await fetch(`/api/rerender/${currentSession.session_id}/${currentPageIndex}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        blocks: updatedBlocks,
-                        font_style: opts.font_style,
-                        fixed_font_size: opts.fixed_font_size,
-                        text_color: opts.text_color,
-                        mask_style: opts.mask_style,
-                    }),
-                });
-                const data = await res.json();
-                if (res.ok && data.status === 'done') {
-                    currentSession.pages[currentPageIndex].blocks = data.blocks || updatedBlocks;
-                    const freshUrl = `/api/image/${currentSession.session_id}/translated/${currentPageIndex}?t=${Date.now()}`;
-                    imgTranslated.src = freshUrl;
-                    if (sliderImgTrans) sliderImgTrans.src = freshUrl;
-                    showToast(`Bulles appliquées en ${data.elapsed_ms || '<50'} ms ✓`, 'success');
-                } else {
-                    showToast("Erreur lors du rendu des bulles", "error");
-                }
-            } catch (err) {
-                showToast("Erreur réseau : " + err.message, "error");
-            } finally {
-                btnApplyBubbles.disabled = false;
-            }
-        });
-    }
-
-    // Cancel translation button
-    if (btnCancelTranslation) {
-        btnCancelTranslation.addEventListener('click', async () => {
-            if (!currentSession) return;
-            try {
-                await fetch(`/api/translate/cancel/${currentSession.session_id}`, { method: 'POST' });
-                if (pollInterval) clearInterval(pollInterval);
-                progressTitle.textContent = "Traduction annulée";
-                btnStart.classList.remove('hidden');
-                showToast("Traduction annulée", 'warning');
-            } catch (err) {
-                showToast("Erreur lors de l'annulation", 'error');
-            }
-        });
-    }
-}
-
-function updateThumbnailBadge(idx, status) {
-    const b = document.getElementById(`badge-st-${idx}`);
-    if (b) {
-        b.className = `thumb-badge ${getBadgeClass(status)}`;
-        b.textContent = getBadgeText(status, idx);
-    }
-}
-
-function preloadNextPage(index) {
-    if (!currentSession || index + 1 >= currentSession.total_pages) return;
-    const nextIdx = index + 1;
-    const preOrig = new Image();
-    preOrig.src = `/api/image/${currentSession.session_id}/original/${nextIdx}`;
-    if (currentSession.pages[nextIdx].status === 'done') {
-        const preTrans = new Image();
-        preTrans.src = `/api/image/${currentSession.session_id}/translated/${nextIdx}`;
-    }
-}
-
-function loadPage(index) {
-    if (!currentSession) return;
-    currentPageIndex = index;
-    stripCounter.textContent = `${index + 1} / ${currentSession.total_pages}`;
-
-    if (btnPrev) btnPrev.disabled = (index <= 0);
-    if (btnNext) btnNext.disabled = (index >= currentSession.total_pages - 1);
-
-    // Subtle transition effect
-    if (readerStage) {
-        readerStage.classList.add('page-fade');
-        setTimeout(() => readerStage.classList.remove('page-fade'), 150);
-    }
-
-    document.querySelectorAll('.thumb-item').forEach((el, idx) => {
-        el.classList.toggle('active', idx === index);
-    });
-
-    const origUrl = `/api/image/${currentSession.session_id}/original/${index}`;
-    const transUrl = `/api/image/${currentSession.session_id}/translated/${index}?t=${Date.now()}`;
-
-    imgOriginal.src = origUrl;
-    if (sliderImgOrig) sliderImgOrig.src = origUrl;
-
-    const pageStatus = currentSession.pages[index].status;
-    if (pageStatus === 'done') {
-        pageLoader.classList.add('hidden');
-        imgTranslated.src = transUrl;
-        if (sliderImgTrans) sliderImgTrans.src = transUrl;
-    } else if (pageStatus === 'processing') {
-        pageLoader.classList.remove('hidden');
-        imgTranslated.src = origUrl;
-        if (sliderImgTrans) sliderImgTrans.src = origUrl;
-    } else {
-        pageLoader.classList.add('hidden');
-        imgTranslated.src = origUrl;
-        if (sliderImgTrans) sliderImgTrans.src = origUrl;
-    }
-
-    const activeThumb = document.getElementById(`thumb-${index}`);
-    if (activeThumb) {
-        activeThumb.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    }
-
-    renderBubbleEditor(index);
-    preloadNextPage(index);
-}
-
-function renderBubbleEditor(index) {
-    const countLbl = document.getElementById('lbl-bubbles-count');
-    const listEl = document.getElementById('bubble-editor-list');
-    if (!currentSession || !currentSession.pages[index]) {
-        if (countLbl) countLbl.textContent = '0';
-        return;
-    }
-    const blocks = currentSession.pages[index].blocks || [];
-    if (countLbl) countLbl.textContent = String(blocks.length);
-    if (!listEl) return;
-
-    if (!blocks.length) {
-        listEl.innerHTML = '<p class="box-hint">Aucune bulle détectée sur cette page pour le moment.</p>';
-        return;
-    }
-
-    listEl.innerHTML = blocks.map((b, i) => {
-        const orig = (b.ja || b.original || '').replace(/</g, '&lt;');
-        const trans = (b.fr || b.translation || '').replace(/</g, '&lt;');
-        return `
-            <div class="bubble-edit-item">
-                <div class="bubble-edit-meta">#${i + 1} <span class="bubble-orig-text">${orig}</span></div>
-                <textarea id="bubble-edit-ta-${i}" class="form-input bubble-edit-ta" rows="2">${trans}</textarea>
+  function renderProviders() {
+    const s = state.settings;
+    $("#providers").innerHTML = PROVIDERS.map((p) => {
+      const has = !!s.configured?.[p.id];
+      const active = s.provider === p.id && engineReady();
+      return `
+      <div class="prov${active ? " selected" : ""}" data-p="${p.id}">
+        <button class="prov-head" data-toggle>
+          <span class="prov-logo" style="background:${p.color}">${p.letter}</span>
+          <span class="prov-title"><b>${p.name}</b><small>${p.desc}</small></span>
+          ${active ? '<span class="tag ok">Actif</span>' : has ? '<span class="tag ok">Clé enregistrée</span>' : p.rec ? '<span class="tag rec">Recommandé</span>' : ""}
+        </button>
+        <div class="prov-body"><div><div class="prov-inner">
+          ${p.custom ? `
+          <div class="step"><b>0</b><div>
+            <label class="small">Adresse du service</label>
+            <input type="url" data-f="base" placeholder="https://exemple.com/v1" value="${esc(s.custom_base_url || "")}">
+          </div></div>` : ""}
+          <div class="step${has ? " done" : ""}" data-step="1"><b>1</b><div>
+            <label class="small">Clé d'accès ${p.keyUrl ? `<a href="${p.keyUrl}" target="_blank" rel="noopener">Obtenir une clé</a>` : ""}</label>
+            <div class="row">
+              <input type="password" data-f="key" autocomplete="off" placeholder="${has ? "Clé déjà enregistrée - laisser vide pour la garder" : "Collez votre clé ici"}">
+              <button class="btn ghost sm" data-act="connect">Connecter</button>
             </div>
-        `;
-    }).join('');
-}
+          </div></div>
+          <div class="step locked" data-step="2"><b>2</b><div>
+            <label class="small">Modèle</label>
+            <select data-f="model"><option>Connectez d'abord votre clé</option></select>
+            <small data-f="count"></small>
+          </div></div>
+          <div class="step locked" data-step="3"><b>3</b><div>
+            <div class="row"><button class="btn primary sm" data-act="use">Vérifier et utiliser</button><span class="test-result" data-f="result"></span></div>
+          </div></div>
+        </div></div></div>
+      </div>`;
+    }).join("");
+  }
 
-function renderThumbnails() {
-    thumbnailStrip.innerHTML = '';
-    currentSession.pages.forEach((p, idx) => {
-        const div = document.createElement('div');
-        div.className = `thumb-item ${idx === currentPageIndex ? 'active' : ''}`;
-        div.id = `thumb-${idx}`;
+  async function providerAction(card, act) {
+    const pid = card.dataset.p;
+    const key = $("[data-f=key]", card).value.trim();
+    const base = $("[data-f=base]", card)?.value.trim() || "";
+    const s1 = $("[data-step='1']", card), s2 = $("[data-step='2']", card), s3 = $("[data-step='3']", card);
+    const result = $("[data-f=result]", card);
 
-        const statusClass = getBadgeClass(p.status);
-        const statusText = getBadgeText(p.status, idx);
-
-        div.innerHTML = `
-            <img src="/api/image/${currentSession.session_id}/original/${idx}" loading="lazy" alt="Miniature page ${idx + 1}">
-            <span class="thumb-badge ${statusClass}" id="badge-st-${idx}">${statusText}</span>
-        `;
-
-        div.addEventListener('click', () => loadPage(idx));
-        thumbnailStrip.appendChild(div);
-    });
-}
-
-function renderWebtoonPages() {
-    if (!webtoonScrollContainer || !currentSession) return;
-    webtoonScrollContainer.innerHTML = '';
-    currentSession.pages.forEach((p, idx) => {
-        const img = document.createElement('img');
-        img.className = 'webtoon-page-img';
-        img.id = `webtoon-img-${idx}`;
-        img.loading = 'lazy';
-        img.alt = `Page ${idx + 1}`;
-        const isDone = p.status === 'done';
-        img.src = isDone
-            ? `/api/image/${currentSession.session_id}/translated/${idx}?t=${Date.now()}`
-            : `/api/image/${currentSession.session_id}/original/${idx}`;
-        img.addEventListener('click', () => {
-            currentPageIndex = idx;
-            stripCounter.textContent = `${idx + 1} / ${currentSession.total_pages}`;
-        });
-        webtoonScrollContainer.appendChild(img);
-    });
-}
-
-// View Modes (Split vs Single vs Slider vs Webtoon)
-function initViewModes() {
-    function clearActiveViewModes() {
-        viewSplit.classList.remove('active');
-        viewSingle.classList.remove('active');
-        if (viewSlider) viewSlider.classList.remove('active');
-        if (viewWebtoon) viewWebtoon.classList.remove('active');
-        versionToggleWrap.classList.add('hidden');
-        if (sliderCompareContainer) sliderCompareContainer.classList.add('hidden');
-        if (webtoonScrollContainer) webtoonScrollContainer.classList.add('hidden');
+    if (act === "connect") {
+      if (!key && !state.settings.configured?.[pid] && pid !== "custom") { toast("Collez d'abord votre clé.", "err"); return; }
+      if (pid === "custom" && !base) { toast("Indiquez l'adresse du service.", "err"); return; }
+      const btn = $("[data-act=connect]", card);
+      btn.disabled = true; btn.textContent = "Connexion...";
+      try {
+        const d = await api("/api/models/fetch", { json: { provider: pid, api_key: key, base_url: base } });
+        if (d.warning) throw new Error("Clé refusée ou service injoignable.");
+        let models = (d.models || []).filter((m) => !/(tts|embedding|embed|image-gen|imagen|audio|live|aqa|whisper|guard)/i.test(m.id));
+        if (!models.length) throw new Error("Aucun modèle compatible trouvé.");
+        models.sort((a, b) => (b.is_free ? 1 : 0) - (a.is_free ? 1 : 0));
+        const sel = $("[data-f=model]", card);
+        sel.innerHTML = models.map((m) => `<option value="${esc(m.id)}">${esc(cleanLabel(m))}</option>`).join("");
+        if (state.settings.provider === pid && models.some((m) => m.id === state.settings.selected_model)) sel.value = state.settings.selected_model;
+        $("[data-f=count]", card).textContent = `${models.length} modèles disponibles${models.some((m) => m.is_free) ? ", gratuits en premier" : ""}.`;
+        s1.classList.add("done"); s2.classList.remove("locked"); s3.classList.remove("locked");
+        result.textContent = ""; result.className = "test-result";
+      } catch (e) {
+        toast(e.message, "err");
+      } finally {
+        btn.disabled = false; btn.textContent = "Connecter";
+      }
     }
 
-    viewSplit.addEventListener('click', () => {
-        viewMode = 'split';
-        clearActiveViewModes();
-        viewSplit.classList.add('active');
-
-        colOriginal.style.display = 'flex';
-        colOriginal.style.maxWidth = '50%';
-        colTranslated.style.display = 'flex';
-        colTranslated.style.maxWidth = '50%';
-    });
-
-    viewSingle.addEventListener('click', () => {
-        viewMode = 'single';
-        clearActiveViewModes();
-        viewSingle.classList.add('active');
-        versionToggleWrap.classList.remove('hidden');
-
-        updateSingleView();
-    });
-
-    if (viewSlider) {
-        viewSlider.addEventListener('click', () => {
-            viewMode = 'slider';
-            clearActiveViewModes();
-            viewSlider.classList.add('active');
-
-            colOriginal.style.display = 'none';
-            colTranslated.style.display = 'none';
-            if (sliderCompareContainer) sliderCompareContainer.classList.remove('hidden');
-        });
+    if (act === "use") {
+      const model = $("[data-f=model]", card).value;
+      const btn = $("[data-act=use]", card);
+      btn.disabled = true; result.className = "test-result"; result.textContent = "Vérification...";
+      try {
+        const t = await api("/api/models/test", { json: { provider: pid, model, api_key: key, base_url: base } });
+        if (!t.ok) throw new Error(t.error || "Le modèle ne répond pas.");
+        const payload = { default_provider: pid, selected_model: model };
+        if (key) payload[`${pid}_api_key`] = key;
+        if (pid === "custom") { payload.custom_base_url = base; payload.custom_model = model; }
+        await api("/api/settings", { json: payload });
+        result.className = "test-result ok"; result.textContent = `Fonctionne (${t.latency_ms} ms)`;
+        s3.classList.add("done");
+        toast(`${providerName(pid)} est prêt.`, "ok");
+        await loadSettings();
+        const again = $(`.prov[data-p="${pid}"]`);
+        if (again) again.classList.add("open");
+      } catch (e) {
+        result.className = "test-result err"; result.textContent = e.message;
+      } finally {
+        btn.disabled = false;
+      }
     }
+  }
 
-    if (viewWebtoon) {
-        viewWebtoon.addEventListener('click', () => {
-            viewMode = 'webtoon';
-            clearActiveViewModes();
-            viewWebtoon.classList.add('active');
+  function cleanLabel(m) {
+    let l = String(m.label || m.id).replace(/\s*\((Gratuit|gratuit|Groq LPU)\)\s*/g, " ").trim();
+    if (l.length > 70) l = l.slice(0, 67) + "...";
+    return m.is_free ? `${l}  -  gratuit` : l;
+  }
 
-            colOriginal.style.display = 'none';
-            colTranslated.style.display = 'none';
-            if (webtoonScrollContainer) {
-                webtoonScrollContainer.classList.remove('hidden');
-                renderWebtoonPages();
-            }
-        });
-    }
+  function setChoice(sel, v) { $$(`${sel} button`).forEach((b) => b.classList.toggle("active", b.dataset.v === v)); }
+  function getChoice(sel) { return $(`${sel} button.active`)?.dataset.v; }
+  function setSizeMode(mode, val) {
+    $$("#size-mode button").forEach((b) => b.classList.toggle("active", b.dataset.v === mode));
+    const r = $("#font-size");
+    r.disabled = mode === "auto";
+    if (val) r.value = val;
+    $("#font-size-out").textContent = mode === "auto" ? "Auto" : `${r.value} px`;
+  }
 
-    chkShowTranslated.addEventListener('change', () => {
-        if (viewMode === 'single') updateSingleView();
-    });
-}
-
-function updateSingleView() {
-    const showTrans = chkShowTranslated.checked;
-    if (showTrans) {
-        colOriginal.style.display = 'none';
-        colTranslated.style.display = 'flex';
-        colTranslated.style.maxWidth = '100%';
-    } else {
-        colOriginal.style.display = 'flex';
-        colOriginal.style.maxWidth = '100%';
-        colTranslated.style.display = 'none';
-    }
-}
-
-// Interactive Slider Compare Logic
-function initSliderCompare() {
-    if (!sliderStage || !sliderHandle) return;
-    let isDragging = false;
-
-    function updateSliderPos(clientX) {
-        const rect = sliderStage.getBoundingClientRect();
-        if (rect.width <= 0) return;
-        let pct = ((clientX - rect.left) / rect.width) * 100;
-        pct = Math.max(0, Math.min(100, pct));
-        sliderStage.style.setProperty('--slider-pos', `${pct}%`);
-        sliderHandle.setAttribute('aria-valuenow', Math.round(pct));
-    }
-
-    sliderHandle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        isDragging = true;
-    });
-    sliderStage.addEventListener('mousedown', (e) => {
-        isDragging = true;
-        updateSliderPos(e.clientX);
-    });
-    window.addEventListener('mousemove', (e) => {
-        if (isDragging) updateSliderPos(e.clientX);
-    });
-    window.addEventListener('mouseup', () => {
-        isDragging = false;
-    });
-
-    sliderStage.addEventListener('touchstart', (e) => {
-        if (e.touches.length > 0) updateSliderPos(e.touches[0].clientX);
-    }, { passive: true });
-    sliderStage.addEventListener('touchmove', (e) => {
-        if (e.touches.length > 0) updateSliderPos(e.touches[0].clientX);
-    }, { passive: true });
-}
-
-// Zoom & Fullscreen Controls
-function initZoomAndFullscreen() {
-    const btnZoomIn = document.getElementById('btn-zoom-in');
-    const btnZoomOut = document.getElementById('btn-zoom-out');
-    const btnZoomFit = document.getElementById('btn-zoom-fit');
-    const btnFullscreen = document.getElementById('btn-fullscreen');
-    const lblZoom = document.getElementById('lbl-zoom-level');
-
-    function applyZoom() {
-        if (lblZoom) lblZoom.textContent = `${zoomLevel}%`;
-        const scale = zoomLevel / 100;
-        [imgOriginal, imgTranslated].forEach(img => {
-            if (img) img.style.transform = `scale(${scale})`;
-        });
-    }
-
-    if (btnZoomIn) {
-        btnZoomIn.addEventListener('click', () => {
-            zoomLevel = Math.min(250, zoomLevel + 15);
-            applyZoom();
-        });
-    }
-    if (btnZoomOut) {
-        btnZoomOut.addEventListener('click', () => {
-            zoomLevel = Math.max(50, zoomLevel - 15);
-            applyZoom();
-        });
-    }
-    if (btnZoomFit) {
-        btnZoomFit.addEventListener('click', () => {
-            fitWidthMode = !fitWidthMode;
-            zoomLevel = 100;
-            applyZoom();
-            if (readerStage) readerStage.classList.toggle('fit-width', fitWidthMode);
-            btnZoomFit.textContent = fitWidthMode ? 'Hauteur' : 'Ajuster';
-        });
-    }
-    if (readerArea) {
-        readerArea.addEventListener('wheel', (e) => {
-            if (e.ctrlKey || e.metaKey) {
-                e.preventDefault();
-                zoomLevel = e.deltaY < 0 ? Math.min(250, zoomLevel + 10) : Math.max(50, zoomLevel - 10);
-                applyZoom();
-            }
-        }, { passive: false });
-    }
-    if (btnFullscreen) {
-        btnFullscreen.addEventListener('click', toggleFullscreen);
-    }
-}
-
-function toggleFullscreen() {
-    const target = readerArea || document.documentElement;
-    if (!document.fullscreenElement) {
-        if (target.requestFullscreen) target.requestFullscreen();
-    } else {
-        if (document.exitFullscreen) document.exitFullscreen();
-    }
-}
-
-// Translation Trigger & Progress Polling
-btnStart.addEventListener('click', async () => {
-    if (!currentSession) return;
-
-    btnStart.classList.add('hidden');
-    progressBanner.classList.remove('hidden');
-    translationStartTime = Date.now();
-
-    const options = {
-        session_id: currentSession.session_id,
-        ...getProviderOptionsPayload(),
+  function lookOptions() {
+    const fixed = $("#size-mode button.active").dataset.v === "fixed";
+    return {
+      font_style: getChoice("#font-choices") || "bold",
+      mask_style: getChoice("#mask-choices") || "smart",
+      text_color: $("#text-color").value,
+      fixed_font_size: fixed ? Number($("#font-size").value) : 0,
     };
+  }
 
+  async function saveSettings() {
+    const payload = { ...lookOptions(), src_lang: $("#set-src").value, tgt_lang: $("#set-tgt").value };
     try {
-        await fetch('/api/translate/start', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(options),
-        });
+      await api("/api/settings", { json: payload });
+      $("#src-lang").value = payload.src_lang;
+      $("#tgt-lang").value = payload.tgt_lang;
+      Object.assign(state.settings, payload);
+      $("#save-state").textContent = "Enregistré";
+      setTimeout(() => ($("#save-state").textContent = ""), 2000);
+      closeModal($("#settings"));
+    } catch (e) { toast(e.message, "err"); }
+  }
 
-        startPolling();
+  function openSettings(tab) {
+    if (tab) switchSettingsTab(tab);
+    openModal($("#settings"));
+  }
+  function switchSettingsTab(t) {
+    $$("#settings-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.stab === t));
+    $$(".stab").forEach((s) => s.classList.toggle("active", s.id === `stab-${t}`));
+  }
+  function openModal(m) { m.classList.add("open"); m.setAttribute("aria-hidden", "false"); }
+  function closeModal(m) { m.classList.remove("open"); m.setAttribute("aria-hidden", "true"); }
+
+  /* ---------------- Upload ---------------- */
+  async function upload(files, isFolder) {
+    if (!files || !files.length) return;
+    const fd = new FormData();
+    if (isFolder) [...files].forEach((f) => fd.append("files", f, f.webkitRelativePath || f.name));
+    else fd.append("file", files[0]);
+    const drop = $("#drop-zone");
+    drop.querySelector("h1").textContent = "Ouverture du chapitre...";
+    try {
+      const d = await api(isFolder ? "/api/upload_folder" : "/api/upload", { method: "POST", body: fd });
+      openSession(d);
     } catch (e) {
-        showToast("Erreur de lancement : " + e.message, 'error');
-        btnStart.classList.remove('hidden');
-        progressBanner.classList.add('hidden');
+      toast(e.message, "err");
+    } finally {
+      drop.querySelector("h1").textContent = "Déposez un chapitre ici";
     }
-});
+  }
 
-function startPolling() {
-    if (pollInterval) clearInterval(pollInterval);
-
-    pollInterval = setInterval(async () => {
-        if (!currentSession) return;
-
-        try {
-            const res = await fetch(`/api/status/${currentSession.session_id}`);
-            const data = await res.json();
-
-            progressPercent.textContent = `${data.progress_percent}%`;
-            progressFill.style.width = `${data.progress_percent}%`;
-            progressLog.textContent = data.current_log;
-
-            const liveFeedEl = document.getElementById('progress-live-feed');
-            if (liveFeedEl && data.last_bubble) {
-                const lb = data.last_bubble;
-                liveFeedEl.textContent = `⚡ [Page ${lb.page}] « ${lb.original} » ➜ « ${lb.translation} » (${lb.model})`;
-            }
-
-            let doneCount = 0;
-            let errCount = 0;
-
-            data.pages.forEach((p, idx) => {
-                const prevStatus = currentSession.pages[idx].status;
-                currentSession.pages[idx].status = p.status;
-                if (p.blocks) {
-                    currentSession.pages[idx].blocks = p.blocks;
-                }
-                if (p.status === 'done') {
-                    doneCount++;
-                    const webtoonImg = document.getElementById(`webtoon-img-${idx}`);
-                    if (webtoonImg && prevStatus !== 'done') {
-                        webtoonImg.src = `/api/image/${currentSession.session_id}/translated/${idx}?t=${Date.now()}`;
-                    }
-                }
-                if (p.status === 'error') errCount++;
-                updateThumbnailBadge(idx, p.status);
-                if (idx === currentPageIndex && prevStatus !== p.status) {
-                    renderBubbleEditor(currentPageIndex);
-                }
-            });
-
-            if (progressStats) {
-                progressStats.textContent = `✓ ${doneCount} traduite${doneCount > 1 ? 's' : ''} · ✗ ${errCount} erreur${errCount > 1 ? 's' : ''}`;
-            }
-
-            const completed = doneCount + errCount;
-            if (progressEta && translationStartTime && completed > 0 && data.total_pages > completed) {
-                const elapsedSec = (Date.now() - translationStartTime) / 1000;
-                const avgSecPerPage = elapsedSec / completed;
-                const remSec = Math.max(1, Math.round(avgSecPerPage * (data.total_pages - completed)));
-                progressEta.textContent = `Temps restant estimé : ~${remSec}s`;
-            } else if (progressEta && data.status === 'finished') {
-                progressEta.textContent = 'Terminé';
-            }
-
-            if (currentSession.pages[currentPageIndex].status === 'done') {
-                pageLoader.classList.add('hidden');
-                const freshUrl = `/api/image/${currentSession.session_id}/translated/${currentPageIndex}?t=${Date.now()}`;
-                imgTranslated.src = freshUrl;
-                if (sliderImgTrans) sliderImgTrans.src = freshUrl;
-            }
-
-            if (data.status === 'finished' || data.status === 'cancelled') {
-                clearInterval(pollInterval);
-                progressTitle.textContent = data.status === 'finished' ? "Traduction terminée !" : "Traduction annulée";
-                if (btnCancelTranslation) btnCancelTranslation.classList.add('hidden');
-                btnDownload.classList.remove('hidden');
-                btnDownload.onclick = () => {
-                    window.location.href = `/api/download/${currentSession.session_id}`;
-                };
-            }
-        } catch (e) {
-            console.error("Erreur de suivi :", e);
+  async function uploadDropped(dt) {
+    const items = [...(dt.items || [])];
+    const entry = items[0]?.webkitGetAsEntry?.();
+    if (entry && entry.isDirectory) {
+      const files = [];
+      const walk = (ent, path) => new Promise((res) => {
+        if (ent.isFile) ent.file((f) => { Object.defineProperty(f, "webkitRelativePath", { value: path + f.name }); files.push(f); res(); });
+        else {
+          const reader = ent.createReader(); const all = [];
+          const readBatch = () => reader.readEntries(async (batch) => {
+            if (!batch.length) { for (const e of all) await walk(e, path + ent.name + "/"); res(); }
+            else { all.push(...batch); readBatch(); }
+          });
+          readBatch();
         }
-    }, 1500);
-}
+      });
+      await walk(entry, "");
+      return upload(files, true);
+    }
+    return upload(dt.files, false);
+  }
 
-function updateApiStatusPills(d) {
-    const setPill = (id, label, hasKey) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.textContent = `${label} ${hasKey ? '✓' : '—'}`;
-        el.className = `status-pill ${hasKey ? 'pill-ok' : 'pill-missing'}`;
+  /* ---------------- Session ---------------- */
+  function openSession(d) {
+    stopPolling();
+    Object.assign(state, { sid: d.session_id, pages: d.pages, total: d.total_pages, cur: 0, status: "ready", ver: {}, animated: new Set(), anim: null, detectShown: null });
+    $("#file-name").textContent = d.filename;
+    $("#file-pages").textContent = `${d.total_pages} page${d.total_pages > 1 ? "s" : ""}`;
+    $("#empty-state").classList.add("hidden");
+    $("#studio").classList.remove("hidden");
+    $("#progress").classList.add("hidden");
+    $("#btn-download").classList.add("hidden");
+    $("#btn-cancel").classList.add("hidden");
+    $("#btn-translate").classList.remove("hidden");
+    $("#btn-translate").disabled = false;
+    $("#btn-translate").textContent = "Traduire";
+    $("#live-badge").classList.add("hidden");
+    renderThumbs();
+    showPage(0);
+  }
+
+  function resetToEmpty() {
+    if (state.status === "translating" && !confirm("Une traduction est en cours. Abandonner ?")) return;
+    if (state.status === "translating") cancel();
+    stopPolling();
+    state.sid = null;
+    $("#studio").classList.add("hidden");
+    $("#empty-state").classList.remove("hidden");
+  }
+
+  const imgUrl = (i, v) => `/api/image/${state.sid}/${v}/${i}?v=${state.ver[i] || 0}`;
+
+  function renderThumbs() {
+    $("#page-list").innerHTML = state.pages.map((p, i) => `
+      <button class="thumb ${p.status}${i === state.cur ? " active" : ""}" data-i="${i}" style="animation-delay:${Math.min(i, 20) * 25}ms" aria-label="Page ${i + 1}">
+        <img loading="lazy" src="${imgUrl(i, p.status === "done" ? "translated" : "original")}" alt="">
+        <span class="num">${i + 1}</span><span class="state"></span>
+      </button>`).join("");
+  }
+
+  function updateThumb(i) {
+    const el = $(`.thumb[data-i="${i}"]`);
+    if (!el) return;
+    const p = state.pages[i];
+    el.className = `thumb ${p.status}${i === state.cur ? " active" : ""}`;
+    if (p.status === "done" && !el.dataset.tr) {
+      el.dataset.tr = "1";
+      el.querySelector("img").src = imgUrl(i, "translated");
+    }
+  }
+
+  function setActiveThumb() {
+    $$(".thumb").forEach((t) => t.classList.toggle("active", Number(t.dataset.i) === state.cur));
+    const a = $(".thumb.active");
+    if (a) a.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }
+
+  function loadImg(img, src) {
+    return new Promise((res) => {
+      if (img.getAttribute("src") === src && img.complete) return res();
+      img.onload = img.onerror = () => res();
+      img.src = src;
+    });
+  }
+
+  async function showPage(i, { keepOverlay = false } = {}) {
+    if (i < 0 || i >= state.total) return;
+    state.cur = i;
+    const p = state.pages[i];
+    const v = state.mode === "translated" && p.status === "done" ? "translated" : "original";
+    const base = $("#img-base");
+    base.classList.add("loading");
+    $("#img-top").classList.remove("show");
+    if (!keepOverlay) { clearOverlay(); setStep(null); }
+    await loadImg(base, imgUrl(i, v));
+    base.classList.remove("loading");
+    syncOverlay();
+    $("#page-indicator").textContent = `Page ${i + 1} sur ${state.total}`;
+    $("#scanline").classList.toggle("on", p.status === "processing" && state.anim !== i);
+    setActiveThumb();
+    renderBubbles();
+  }
+
+  function syncOverlay() {
+    const img = $("#img-base"), ov = $("#overlay");
+    Object.assign(ov.style, { left: img.offsetLeft + "px", top: img.offsetTop + "px", width: img.offsetWidth + "px", height: img.offsetHeight + "px" });
+    const sc = $("#scanline");
+    Object.assign(sc.style, { left: img.offsetLeft + "px", width: img.offsetWidth + "px" });
+  }
+
+  function clearOverlay() { const ov = $("#overlay"); ov.innerHTML = ""; ov.classList.remove("fade"); }
+
+  function drawBoxes(blocks) {
+    const ov = $("#overlay");
+    ov.classList.remove("fade");
+    ov.innerHTML = blocks.map((b, n) => {
+      const [x0, y0, x1, y1] = b.box;
+      return `<div class="box" data-n="${n + 1}" style="left:${x0 / 10}%;top:${y0 / 10}%;width:${(x1 - x0) / 10}%;height:${(y1 - y0) / 10}%;animation-delay:${n * 90}ms"></div>`;
+    }).join("");
+  }
+
+  function setStep(s) {
+    const bar = $("#stage-step");
+    const order = ["detect", "clean", "write"];
+    bar.classList.toggle("on", !!s);
+    $$("span", bar).forEach((el) => {
+      const k = order.indexOf(el.dataset.s), c = order.indexOf(s);
+      el.classList.toggle("active", el.dataset.s === s);
+      el.classList.toggle("past", c > k);
+    });
+  }
+
+  function renderBubbles() {
+    const p = state.pages[state.cur];
+    const list = $("#bubble-list");
+    const head = $(".panel-head");
+    let retry = $("#btn-retry");
+    if (!retry) {
+      retry = document.createElement("button");
+      retry.id = "btn-retry"; retry.className = "btn ghost sm"; retry.textContent = "Retraduire la page";
+      retry.onclick = retranslatePage;
+      head.insertBefore(retry, $("#btn-apply-edits"));
+    }
+    retry.classList.toggle("hidden", !(p && (p.status === "done" || p.status === "error")) || state.status === "translating");
+    state.dirty = false;
+    $("#btn-apply-edits").classList.add("hidden");
+    if (!p || !p.blocks || !p.blocks.length) {
+      const msg = p?.status === "processing" ? "Lecture de la page en cours..." : p?.status === "error" ? "Cette page n'a pas pu être traduite. " + esc(p.error || "") : p?.status === "done" ? "Aucun texte détecté sur cette page." : "Les textes détectés apparaîtront ici.";
+      list.innerHTML = `<p class="muted small">${msg}</p>`;
+      return;
+    }
+    list.innerHTML = p.blocks.map((b, n) => `
+      <div class="bubble" data-n="${n}" style="animation-delay:${n * 40}ms">
+        <div class="orig"><b>${n + 1}</b><span>${esc(b.original || b.ja)}</span></div>
+        <textarea rows="2" data-n="${n}">${esc(b.translation || b.fr)}</textarea>
+      </div>`).join("");
+  }
+
+  async function applyEdits() {
+    const p = state.pages[state.cur];
+    const blocks = p.blocks.map((b, n) => ({ ...b, translation: $(`textarea[data-n="${n}"]`).value, fr: $(`textarea[data-n="${n}"]`).value }));
+    const btn = $("#btn-apply-edits");
+    btn.disabled = true;
+    try {
+      const d = await api(`/api/rerender/${state.sid}/${state.cur}`, { json: { blocks, ...lookOptions() } });
+      p.blocks = d.blocks;
+      state.ver[state.cur] = (state.ver[state.cur] || 0) + 1;
+      $(`.thumb[data-i="${state.cur}"]`)?.removeAttribute("data-tr");
+      updateThumb(state.cur);
+      state.mode = "translated"; syncModeButtons();
+      await showPage(state.cur);
+      toast("Page mise à jour.", "ok");
+    } catch (e) { toast(e.message, "err"); }
+    finally { btn.disabled = false; }
+  }
+
+  async function retranslatePage() {
+    const i = state.cur, p = state.pages[i];
+    if (!engineReady()) { toast("Connectez d'abord un service de traduction.", "err"); openSettings("engine"); return; }
+    p.status = "processing"; p.blocks = []; updateThumb(i); renderBubbles();
+    $("#scanline").classList.add("on"); setStep("detect");
+    try {
+      const d = await api(`/api/translate/page/${state.sid}/${i}`, { json: translateOptions() });
+      p.status = d.status; p.blocks = d.blocks || []; p.error = d.error;
+      state.ver[i] = (state.ver[i] || 0) + 1;
+      $(`.thumb[data-i="${i}"]`)?.removeAttribute("data-tr");
+      updateThumb(i);
+      if (d.status === "done") await playReveal(i); else { setStep(null); await showPage(i); toast("La page n'a pas pu être traduite.", "err"); }
+    } catch (e) { toast(e.message, "err"); p.status = "error"; updateThumb(i); showPage(i); }
+  }
+
+  /* ---------------- Translation ---------------- */
+  function translateOptions() {
+    const s = state.settings;
+    return {
+      provider: s.provider, model: s.selected_model,
+      base_url: s.provider === "custom" ? s.custom_base_url : undefined,
+      src_lang: $("#src-lang").value, tgt_lang: $("#tgt-lang").value,
+      ...lookOptions(),
     };
-    setPill('pill-gemini', 'Gemini', Boolean(d.gemini_api_key && d.gemini_api_key.trim()));
-    setPill('pill-openrouter', 'OpenRouter', Boolean(d.openrouter_api_key && d.openrouter_api_key.trim()));
-    setPill('pill-groq', 'Groq', Boolean(d.groq_api_key && d.groq_api_key.trim()));
-}
+  }
 
-// Settings modal logic with Universal Provider & Model selection
-function initSettings() {
-    btnOpenSettings.addEventListener('click', async () => {
-        await fetchSettings();
-        settingsModal.classList.remove('hidden');
+  async function startTranslation() {
+    if (!engineReady()) {
+      toast("Connectez d'abord un service de traduction.", "err");
+      openSettings("engine");
+      return;
+    }
+    if ($("#src-lang").value === $("#tgt-lang").value) { toast("Choisissez deux langues différentes.", "err"); return; }
+    try {
+      await api("/api/translate/start", { json: { session_id: state.sid, ...translateOptions() } });
+    } catch (e) { toast(e.message, "err"); return; }
+    state.status = "translating";
+    state.animated = new Set(); state.anim = null; state.detectShown = null;
+    state.pages.forEach((p) => { if (p.status !== "done") p.status = "pending"; });
+    $("#btn-translate").classList.add("hidden");
+    $("#btn-cancel").classList.remove("hidden");
+    $("#btn-download").classList.add("hidden");
+    $("#progress").classList.remove("hidden", "done");
+    $("#live-badge").classList.remove("hidden");
+    $("#progress-fill").style.width = "0%";
+    $("#progress-label").textContent = "Démarrage";
+    renderBubbles();
+    state.poll = setInterval(pollStatus, 700);
+    pollStatus();
+  }
+
+  async function cancel() {
+    try { await api(`/api/translate/cancel/${state.sid}`, { method: "POST" }); } catch { /* ignore */ }
+  }
+
+  function stopPolling() { if (state.poll) clearInterval(state.poll); state.poll = null; }
+
+  async function pollStatus() {
+    if (!state.sid) return stopPolling();
+    let d;
+    try { d = await api(`/api/status/${state.sid}`); } catch { return; }
+    const prev = state.pages;
+    state.pages = d.pages;
+    const done = d.pages.filter((p) => p.status === "done" || p.status === "error").length;
+    $("#progress-fill").style.width = `${d.progress_percent}%`;
+    $("#progress-count").textContent = `${done} / ${d.total_pages}`;
+    const proc = d.pages.findIndex((p) => p.status === "processing");
+    $("#progress-label").textContent = proc >= 0 ? `Traduction de la page ${proc + 1}` : "Traduction";
+    d.pages.forEach((p, i) => { if (!prev[i] || prev[i].status !== p.status) updateThumb(i); });
+
+    // keep the viewed page panel fresh when not animating it
+    if (state.anim !== state.cur && prev[state.cur]?.status !== d.pages[state.cur].status && !state.follow) showPage(state.cur);
+
+    if (state.follow) driveLive(prev);
+
+    if (["finished", "cancelled"].includes(d.status)) {
+      stopPolling();
+      state.status = d.status;
+      $("#btn-cancel").classList.add("hidden");
+      $("#btn-translate").classList.remove("hidden");
+      $("#btn-translate").textContent = "Traduire à nouveau";
+      $("#live-badge").classList.add("hidden");
+      $("#progress").classList.add("done");
+      $("#scanline").classList.remove("on");
+      if (d.status === "finished") {
+        $("#progress-label").textContent = d.errors_count ? `Terminé, ${d.errors_count} page(s) en erreur` : "Traduction terminée";
+        const dl = $("#btn-download");
+        dl.href = `/api/download/${state.sid}`;
+        dl.classList.remove("hidden");
+        toast(d.errors_count ? `Terminé avec ${d.errors_count} page(s) en erreur.` : "Chapitre traduit.", d.errors_count ? "err" : "ok");
+      } else {
+        $("#progress-label").textContent = "Traduction arrêtée";
+      }
+      if (state.anim === null) showPage(state.cur);
+    }
+  }
+
+  /* ---------------- Live view ---------------- */
+  function driveLive(prev) {
+    if (state.anim !== null) return;
+    // 1. pages that just finished and haven't been revealed (most recent first, skip backlog)
+    const fresh = state.pages
+      .map((p, i) => ({ p, i }))
+      .filter(({ p, i }) => p.status === "done" && !state.animated.has(i) && prev[i] && prev[i].status !== "done");
+    if (fresh.length) {
+      fresh.slice(0, -1).forEach(({ i }) => state.animated.add(i));
+      const target = fresh[fresh.length - 1].i;
+      playReveal(target);
+      return;
+    }
+    // 2. otherwise show the page being processed with the scanning effect
+    const proc = state.pages.findIndex((p) => p.status === "processing");
+    if (proc >= 0 && state.detectShown !== proc) {
+      state.detectShown = proc;
+      state.mode = "translated"; syncModeButtons();
+      showPage(proc).then(() => { if (state.anim === null) setStep("detect"); });
+    }
+  }
+
+  async function playReveal(i) {
+    state.anim = i;
+    state.animated.add(i);
+    const p = state.pages[i];
+    const blocks = p.blocks || [];
+    const base = $("#img-base"), top = $("#img-top");
+    state.cur = i;
+    setActiveThumb();
+    $("#page-indicator").textContent = `Page ${i + 1} sur ${state.total}`;
+    await loadImg(base, imgUrl(i, "original"));
+    top.classList.remove("show");
+    syncOverlay();
+    // 1. detected bubbles
+    setStep("detect");
+    $("#scanline").classList.add("on");
+    await sleep(500);
+    $("#scanline").classList.remove("on");
+    drawBoxes(blocks);
+    renderBubbles();
+    await sleep(700 + blocks.length * 90);
+    // 2. erase
+    setStep("clean");
+    const cleanUrl = `/api/image/${state.sid}/clean/${i}?v=${state.ver[i] || 0}`;
+    await loadImg(top, cleanUrl);
+    $$(".box").forEach((b, n) => setTimeout(() => b.classList.add("erase"), n * 70));
+    await sleep(500 + blocks.length * 70);
+    top.classList.add("show");
+    await sleep(500);
+    $$(".box").forEach((b) => b.classList.remove("erase"));
+    // 3. rewrite
+    setStep("write");
+    const boxes = $$(".box");
+    for (let n = 0; n < boxes.length; n++) {
+      const b = boxes[n];
+      b.classList.add("write");
+      const txt = document.createElement("div");
+      txt.className = "txt";
+      const h = b.getBoundingClientRect().height;
+      txt.style.fontSize = Math.max(8, Math.min(16, h / 5)) + "px";
+      b.appendChild(txt);
+      typeText(txt, blocks[n].translation || blocks[n].fr || "");
+      await sleep(Math.min(260, 1400 / Math.max(1, boxes.length)));
+    }
+    await sleep(800);
+    // 4. final image
+    await loadImg(top, imgUrl(i, "translated"));
+    $("#overlay").classList.add("fade");
+    await sleep(600);
+    await loadImg(base, imgUrl(i, "translated"));
+    top.classList.remove("show");
+    clearOverlay();
+    setStep(null);
+    state.anim = null;
+    state.detectShown = null;
+    if (state.status !== "translating" || !state.follow) renderBubbles();
+  }
+
+  function typeText(el, text) {
+    let k = 0;
+    const step = Math.max(1, Math.ceil(text.length / 18));
+    const t = setInterval(() => {
+      k += step; el.textContent = text.slice(0, k);
+      if (k >= text.length) clearInterval(t);
+    }, 30);
+    setTimeout(() => clearInterval(t), 3000);
+  }
+
+  function syncModeButtons() { $$("#view-mode button").forEach((b) => b.classList.toggle("active", b.dataset.mode === state.mode)); }
+
+  /* ---------------- Library ---------------- */
+  async function loadLibrary() {
+    const box = $("#library-list");
+    try {
+      const d = await api("/api/library");
+      if (!d.library.length) { box.innerHTML = `<div class="empty-note">Aucun chapitre traduit pour le moment.</div>`; return; }
+      box.innerHTML = d.library.map((it, n) => `
+        <div class="lib-item" style="animation-delay:${n * 30}ms">
+          <span class="ext">${esc(it.format)}</span>
+          <div class="meta"><b title="${esc(it.filename)}">${esc(it.filename)}</b><small>${esc(it.date)} - ${it.size_mb} Mo</small></div>
+          <a class="icon-btn" href="${it.download_url}" title="Télécharger" aria-label="Télécharger"><svg><use href="#i-down"/></svg></a>
+        </div>`).join("");
+    } catch { box.innerHTML = `<div class="empty-note">Bibliothèque indisponible.</div>`; }
+  }
+
+  /* ---------------- Quit ---------------- */
+  async function quitApp() {
+    closeModal($("#quit-modal"));
+    try { await fetch("/api/system/shutdown", { method: "POST" }); } catch { /* ignore */ }
+    $("#closed-screen").classList.remove("hidden");
+    setTimeout(() => window.close(), 400);
+  }
+
+  /* ---------------- Events ---------------- */
+  function bind() {
+    $$("[data-nav]").forEach((b) => b.addEventListener("click", (e) => { e.preventDefault(); go(b.dataset.nav); }));
+    window.addEventListener("resize", () => { moveIndicator(); syncOverlay(); });
+
+    // drop zone
+    const drop = $("#drop-zone");
+    ["dragenter", "dragover"].forEach((ev) => document.addEventListener(ev, (e) => { e.preventDefault(); if (!state.sid) drop.classList.add("over"); }));
+    ["dragleave", "drop"].forEach((ev) => document.addEventListener(ev, (e) => { e.preventDefault(); if (ev === "drop" || !e.relatedTarget) drop.classList.remove("over"); }));
+    document.addEventListener("drop", (e) => { if (!state.sid || $("#view-translate").classList.contains("active")) { if (e.dataTransfer?.files?.length) { if (state.sid && state.status === "translating") return; go("translate"); uploadDropped(e.dataTransfer); } } });
+    $("#btn-pick-file").onclick = (e) => { e.stopPropagation(); $("#file-input").click(); };
+    $("#btn-pick-folder").onclick = (e) => { e.stopPropagation(); $("#folder-input").click(); };
+    drop.addEventListener("click", () => $("#file-input").click());
+    drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#file-input").click(); } });
+    $("#file-input").onchange = (e) => { upload(e.target.files, false); e.target.value = ""; };
+    $("#folder-input").onchange = (e) => { upload(e.target.files, true); e.target.value = ""; };
+
+    // studio
+    $("#btn-translate").onclick = startTranslation;
+    $("#btn-cancel").onclick = cancel;
+    $("#btn-new").onclick = resetToEmpty;
+    $("#btn-swap-lang").onclick = () => { const a = $("#src-lang"), b = $("#tgt-lang"); [a.value, b.value] = [b.value, a.value]; };
+    $("#page-list").addEventListener("click", (e) => {
+      const t = e.target.closest(".thumb"); if (!t) return;
+      if (state.status === "translating") { state.follow = false; $("#follow-live").checked = false; }
+      if (state.anim === null) showPage(Number(t.dataset.i));
+    });
+    $("#btn-prev").onclick = () => navPage(-1);
+    $("#btn-next").onclick = () => navPage(1);
+    $("#follow-live").onchange = (e) => { state.follow = e.target.checked; state.detectShown = null; };
+    $$("#view-mode button").forEach((b) => b.onclick = () => { state.mode = b.dataset.mode; syncModeButtons(); if (state.anim === null) showPage(state.cur); });
+
+    // hold to compare
+    const canvas = $("#canvas");
+    let holdT = null, startX = 0;
+    canvas.addEventListener("pointerdown", (e) => {
+      startX = e.clientX;
+      if (state.anim !== null || state.pages[state.cur]?.status !== "done" || state.mode !== "translated") return;
+      holdT = setTimeout(async () => { const top = $("#img-top"); await loadImg(top, imgUrl(state.cur, "original")); top.classList.add("show"); }, 180);
+    });
+    const release = (e) => {
+      clearTimeout(holdT);
+      if (state.anim === null) $("#img-top").classList.remove("show");
+      if (e && e.type === "pointerup" && Math.abs(e.clientX - startX) > 60) navPage(e.clientX < startX ? 1 : -1);
+    };
+    ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => canvas.addEventListener(ev, release));
+
+    $("#bubble-list").addEventListener("input", () => { state.dirty = true; $("#btn-apply-edits").classList.remove("hidden"); });
+    $("#bubble-list").addEventListener("mouseover", (e) => {
+      const b = e.target.closest(".bubble");
+      $$(".bubble").forEach((x) => x.classList.toggle("hl", x === b));
+    });
+    $("#btn-apply-edits").onclick = applyEdits;
+
+    document.addEventListener("keydown", (e) => {
+      if (/input|textarea|select/i.test(document.activeElement.tagName)) return;
+      if (e.key === "Escape") $$(".modal.open").forEach(closeModal);
+      if (!state.sid || !$("#view-translate").classList.contains("active")) return;
+      if (e.key === "ArrowRight") navPage(1);
+      if (e.key === "ArrowLeft") navPage(-1);
     });
 
-    btnCloseSettings.addEventListener('click', () => {
-        settingsModal.classList.add('hidden');
+    // settings
+    $("#btn-settings").onclick = () => openSettings();
+    $$("[data-close]").forEach((el) => el.addEventListener("click", () => closeModal(el.closest(".modal"))));
+    $$("#settings-tabs button").forEach((b) => b.onclick = () => switchSettingsTab(b.dataset.stab));
+    $("#providers").addEventListener("click", (e) => {
+      const card = e.target.closest(".prov"); if (!card) return;
+      if (e.target.closest("[data-toggle]")) {
+        const open = !card.classList.contains("open");
+        $$(".prov").forEach((c) => c.classList.remove("open"));
+        card.classList.toggle("open", open);
+        if (open) setTimeout(() => $("[data-f=key]", card)?.focus(), 200);
+      }
+      const act = e.target.closest("[data-act]");
+      if (act) providerAction(card, act.dataset.act);
     });
-
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-            btn.classList.add('active');
-            document.getElementById(btn.dataset.tab).classList.add('active');
-        });
+    $("#providers").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && e.target.matches("[data-f=key]")) providerAction(e.target.closest(".prov"), "connect");
     });
+    $$("#font-choices button").forEach((b) => b.onclick = () => setChoice("#font-choices", b.dataset.v));
+    $$("#mask-choices button").forEach((b) => b.onclick = () => setChoice("#mask-choices", b.dataset.v));
+    $$("#size-mode button").forEach((b) => b.onclick = () => setSizeMode(b.dataset.v));
+    $("#font-size").oninput = () => setSizeMode("fixed");
+    $("#btn-save-settings").onclick = saveSettings;
 
-    const cfgProvider = document.getElementById('cfg-provider');
-    const cfgBaseUrl = document.getElementById('cfg-base-url');
-    const cfgApiKey = document.getElementById('cfg-api-key');
-    const lblApiKey = document.getElementById('lbl-api-key');
-    const cfgModelSelect = document.getElementById('cfg-model-select');
-    const cfgModelCustom = document.getElementById('cfg-model-custom');
+    // quit
+    $("#btn-quit").onclick = () => openModal($("#quit-modal"));
+    $("#btn-quit-confirm").onclick = quitApp;
 
-    let fetchModelsTimeout = null;
-
-    async function loadModelsFromProvider(selectedModel = '') {
-        const prov = cfgProvider.value;
-        const key = cfgApiKey ? cfgApiKey.value.trim() : '';
-        const base = cfgBaseUrl ? cfgBaseUrl.value.trim() : '';
-
-        if (cfgModelSelect) {
-            cfgModelSelect.innerHTML = '<option value="">⏳ Découverte des modèles en direct depuis l\'API...</option>';
-        }
-
-        try {
-            const res = await fetch('/api/models/fetch', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ provider: prov, api_key: key, base_url: base }),
-            });
-            const data = await res.json();
-            const models = data.models || [];
-
-            if (cfgModelSelect) {
-                cfgModelSelect.innerHTML = '';
-                models.forEach(m => {
-                    const opt = document.createElement('option');
-                    opt.value = m.id;
-                    opt.textContent = m.label || m.id;
-                    cfgModelSelect.appendChild(opt);
-                });
-
-                const optCustom = document.createElement('option');
-                optCustom.value = '__custom__';
-                optCustom.textContent = '✍️ Nom de modèle personnalisé...';
-                cfgModelSelect.appendChild(optCustom);
-
-                if (selectedModel && models.some(m => m.id === selectedModel)) {
-                    cfgModelSelect.value = selectedModel;
-                    if (cfgModelCustom) cfgModelCustom.classList.add('hidden');
-                } else if (selectedModel) {
-                    cfgModelSelect.value = '__custom__';
-                    if (cfgModelCustom) {
-                        cfgModelCustom.value = selectedModel;
-                        cfgModelCustom.classList.remove('hidden');
-                    }
-                } else if (models.length > 0) {
-                    cfgModelSelect.value = models[0].id;
-                    if (cfgModelCustom) cfgModelCustom.classList.add('hidden');
-                }
-            }
-        } catch (err) {
-            console.error("Erreur découverte modèles:", err);
-            onProviderChange(selectedModel);
-        }
-    }
-
-    function onProviderChange(selectedModel = '') {
-        const prov = cfgProvider.value;
-        const preset = providerPresets[prov] || {};
-
-        if (lblApiKey) {
-            lblApiKey.textContent = `Clé d'API ${preset.name || prov} :`;
-        }
-        if (cfgBaseUrl && preset.base_url) {
-            cfgBaseUrl.value = preset.base_url;
-        }
-
-        // Live discovery from API
-        loadModelsFromProvider(selectedModel);
-    }
-
-    if (cfgProvider) {
-        cfgProvider.addEventListener('change', () => onProviderChange());
-    }
-
-    if (cfgApiKey) {
-        cfgApiKey.addEventListener('input', () => {
-            clearTimeout(fetchModelsTimeout);
-            fetchModelsTimeout = setTimeout(() => {
-                const curSel = cfgModelSelect ? cfgModelSelect.value : '';
-                loadModelsFromProvider(curSel);
-            }, 600);
-        });
-    }
-
-    if (cfgModelSelect) {
-        cfgModelSelect.addEventListener('change', () => {
-            if (cfgModelSelect.value === '__custom__') {
-                if (cfgModelCustom) {
-                    cfgModelCustom.classList.remove('hidden');
-                    cfgModelCustom.focus();
-                }
-            } else {
-                if (cfgModelCustom) cfgModelCustom.classList.add('hidden');
-            }
-        });
-    }
-
-    const range = document.getElementById('cfg-font-size');
-    const lbl = document.getElementById('lbl-font-size');
-    if (range && lbl) {
-        range.addEventListener('input', () => {
-            lbl.textContent = range.value == 0 ? "Auto-Fit (Adaptation automatique)" : `${range.value} px`;
-        });
-    }
-
-    btnSaveSettings.addEventListener('click', async () => {
-        let chosenModel = cfgModelSelect ? cfgModelSelect.value : '';
-        if (chosenModel === '__custom__' && cfgModelCustom) {
-            chosenModel = cfgModelCustom.value.trim();
-        }
-
-        const payload = {
-            default_provider: cfgProvider.value,
-            selected_model: chosenModel,
-            custom_base_url: cfgBaseUrl.value.trim(),
-            custom_api_key: cfgApiKey.value.trim(),
-            groq_api_key: document.getElementById('cfg-groq-key').value.trim(),
-            src_lang: document.getElementById('cfg-src-lang').value,
-            tgt_lang: document.getElementById('cfg-tgt-lang').value,
-            font_style: document.getElementById('cfg-font-style').value,
-            fixed_font_size: parseInt(document.getElementById('cfg-font-size').value, 10) || 0,
-            text_color: document.getElementById('cfg-text-color').value,
-            mask_style: document.getElementById('cfg-mask-style').value,
-        };
-
-        const res = await fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-
-        if (res.ok) {
-            settingsModal.classList.add('hidden');
-            showToast("Paramètres enregistrés ✓", 'success');
-        }
+    // guide scrollspy
+    const gv = $("#view-guide");
+    gv.addEventListener("scroll", () => {
+      let cur = null;
+      $$(".guide-body section").forEach((s) => { if (s.getBoundingClientRect().top < 140) cur = s.id; });
+      if (cur) $$("#guide-nav a").forEach((a) => a.classList.toggle("active", a.getAttribute("href") === `#${cur}`));
     });
+    $$("#guide-nav a").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); $(a.getAttribute("href")).scrollIntoView({ behavior: "smooth" }); }));
+  }
 
-    fetchSettings();
-}
+  function navPage(d) {
+    if (!state.sid || state.anim !== null) return;
+    const n = state.cur + d;
+    if (n < 0 || n >= state.total) return;
+    if (state.status === "translating") { state.follow = false; $("#follow-live").checked = false; }
+    showPage(n);
+  }
 
-async function fetchSettings() {
-    try {
-        const res = await fetch('/api/settings');
-        const d = await res.json();
-        if (d.presets) {
-            providerPresets = d.presets;
-        }
+  /* ---------------- Boot ---------------- */
+  function heartbeat() { fetch("/api/system/heartbeat", { method: "POST" }).catch(() => {}); }
 
-        const cfgProvider = document.getElementById('cfg-provider');
-        const cfgBaseUrl = document.getElementById('cfg-base-url');
-        const cfgApiKey = document.getElementById('cfg-api-key');
-
-        if (cfgProvider) cfgProvider.value = d.provider || 'gemini';
-        if (cfgBaseUrl) cfgBaseUrl.value = d.custom_base_url || 'https://openrouter.ai/api/v1';
-        if (cfgApiKey) {
-            cfgApiKey.value = d.custom_api_key || d.gemini_api_key || d.openrouter_api_key || '';
-        }
-
-        document.getElementById('cfg-groq-key').value = d.groq_api_key || '';
-        document.getElementById('cfg-src-lang').value = d.src_lang || 'Japanese';
-        document.getElementById('cfg-tgt-lang').value = d.tgt_lang || 'French';
-        document.getElementById('cfg-font-style').value = d.font_style || 'bold';
-        document.getElementById('cfg-font-size').value = d.fixed_font_size || 0;
-        document.getElementById('lbl-font-size').textContent = (d.fixed_font_size || 0) == 0 ? "Auto-Fit (Adaptation automatique)" : `${d.fixed_font_size} px`;
-        document.getElementById('cfg-text-color').value = d.text_color || '#000000';
-        document.getElementById('cfg-mask-style').value = d.mask_style || 'smart';
-
-        updateApiStatusPills(d);
-
-        // Populate and select current model
-        const preset = providerPresets[cfgProvider.value] || {};
-        const selectedModel = d.selected_model || d.custom_model || preset.default_model || '';
-        const cfgModelSelect = document.getElementById('cfg-model-select');
-        const cfgModelCustom = document.getElementById('cfg-model-custom');
-
-        if (cfgModelSelect) {
-            cfgModelSelect.innerHTML = '';
-            const models = preset.models || [];
-            models.forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m.id;
-                opt.textContent = m.label || m.id;
-                cfgModelSelect.appendChild(opt);
-            });
-            const optCustom = document.createElement('option');
-            optCustom.value = '__custom__';
-            optCustom.textContent = '✍️ Nom de modèle personnalisé...';
-            cfgModelSelect.appendChild(optCustom);
-
-            if (selectedModel && models.some(m => m.id === selectedModel)) {
-                cfgModelSelect.value = selectedModel;
-                if (cfgModelCustom) cfgModelCustom.classList.add('hidden');
-            } else if (selectedModel) {
-                cfgModelSelect.value = '__custom__';
-                if (cfgModelCustom) {
-                    cfgModelCustom.value = selectedModel;
-                    cfgModelCustom.classList.remove('hidden');
-                }
-            } else if (preset.default_model) {
-                cfgModelSelect.value = preset.default_model;
-                if (cfgModelCustom) cfgModelCustom.classList.add('hidden');
-            }
-        }
-    } catch (e) {
-        console.error("Erreur chargement settings:", e);
-    }
-}
-
-// Translation History logic
-function initHistory() {
-    const btnOpen = document.getElementById('btn-open-history');
-    const btnClose = document.getElementById('btn-close-history');
-    const btnCloseFooter = document.getElementById('btn-close-history-footer');
-    const historyModal = document.getElementById('history-modal');
-    const historyList = document.getElementById('history-list');
-
-    async function loadHistory() {
-        if (!historyList) return;
-        historyList.innerHTML = '<p class="box-hint">Chargement de l\'historique...</p>';
-        try {
-            const res = await fetch('/api/history');
-            const data = await res.json();
-            const items = data.history || [];
-            if (!items.length) {
-                historyList.innerHTML = '<p class="box-hint">Aucun manga traduit dans l\'historique pour le moment.</p>';
-                return;
-            }
-            historyList.innerHTML = items.map(it => `
-                <div class="history-item" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-                    <div>
-                        <strong style="font-size: 14px; display: block; color: var(--text-primary);">${it.filename}</strong>
-                        <small style="color: var(--text-secondary);">${it.date} • ${it.total_pages} page(s) • Modèle: ${it.model}</small>
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-sm btn-secondary" onclick="openHistorySession('${it.session_id}')">📖 Ouvrir</button>
-                        <a href="${it.download_url}" class="btn btn-sm btn-primary" download>💾 Télécharger</a>
-                    </div>
-                </div>
-            `).join('');
-        } catch (err) {
-            historyList.innerHTML = '<p class="box-hint" style="color: var(--danger);">Erreur chargement historique.</p>';
-        }
-    }
-
-    if (btnOpen) {
-        btnOpen.addEventListener('click', () => {
-            loadHistory();
-            if (historyModal) historyModal.classList.remove('hidden');
-        });
-    }
-    if (btnClose && historyModal) {
-        btnClose.addEventListener('click', () => historyModal.classList.add('hidden'));
-    }
-    if (btnCloseFooter && historyModal) {
-        btnCloseFooter.addEventListener('click', () => historyModal.classList.add('hidden'));
-    }
-}
-
-window.openHistorySession = async function(sessionId) {
-    try {
-        const res = await fetch(`/api/session/${sessionId}`);
-        if (!res.ok) {
-            showToast("Session expirée de la mémoire, veuillez recharger le fichier", "warning");
-            return;
-        }
-        const data = await res.json();
-        activateSessionWorkspace(data);
-        const modal = document.getElementById('history-modal');
-        if (modal) modal.classList.add('hidden');
-        showToast(`Manga "${data.filename}" ouvert dans la liseuse !`, "success");
-    } catch (err) {
-        showToast("Erreur ouverture session : " + err.message, "error");
-    }
-};
-
-// Permanent Library logic (data/output/)
-function initLibrary() {
-    const btnOpen = document.getElementById('btn-open-library');
-    const btnClose = document.getElementById('btn-close-library');
-    const btnCloseFooter = document.getElementById('btn-close-library-footer');
-    const libraryModal = document.getElementById('library-modal');
-    const libraryList = document.getElementById('library-list');
-
-    async function loadLibrary() {
-        if (!libraryList) return;
-        libraryList.innerHTML = '<p class="box-hint">Chargement des mangas traduits...</p>';
-        try {
-            const res = await fetch('/api/library');
-            const data = await res.json();
-            const items = data.library || [];
-            if (!items.length) {
-                libraryList.innerHTML = '<p class="box-hint">Aucun manga archivé dans data/output pour l\'instant.</p>';
-                return;
-            }
-            libraryList.innerHTML = items.map(it => `
-                <div class="history-item" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-                    <div>
-                        <strong style="font-size: 14px; display: block; color: var(--text-primary);">📖 ${it.filename}</strong>
-                        <small style="color: var(--text-secondary);">${it.date} • ${it.size_mb} Mo • Format ${it.format.toUpperCase()}</small>
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <a href="${it.download_url}" class="btn btn-sm btn-primary" download>💾 Télécharger</a>
-                    </div>
-                </div>
-            `).join('');
-        } catch (err) {
-            libraryList.innerHTML = '<p class="box-hint" style="color: var(--danger);">Erreur lors du chargement de la bibliothèque.</p>';
-        }
-    }
-
-    if (btnOpen) {
-        btnOpen.addEventListener('click', () => {
-            loadLibrary();
-            if (libraryModal) libraryModal.classList.remove('hidden');
-        });
-    }
-    if (btnClose && libraryModal) {
-        btnClose.addEventListener('click', () => libraryModal.classList.add('hidden'));
-    }
-    if (btnCloseFooter && libraryModal) {
-        btnCloseFooter.addEventListener('click', () => libraryModal.classList.add('hidden'));
-    }
-}
-
-// GitHub Auto-Update Check
-async function checkSystemUpdate() {
-    const pill = document.getElementById('pill-update');
-    if (!pill) return;
-    try {
-        const res = await fetch('/api/system/check_update');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.up_to_date) {
-            pill.textContent = `🟢 v${data.version} (À jour)`;
-            pill.title = `Version ${data.version} (${data.current_commit}) synchronisée avec origin/main`;
-            pill.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-            pill.style.color = '#34d399';
-        } else {
-            pill.textContent = `⬆️ v${data.version} (Mise à jour dispo)`;
-            pill.title = `Nouvelle version disponible sur GitHub (${data.latest_commit}) !`;
-            pill.style.borderColor = 'rgba(245, 158, 11, 0.5)';
-            pill.style.color = '#fbbf24';
-            pill.style.cursor = 'pointer';
-            pill.onclick = () => {
-                showToast(`Nouvelle mise à jour détectée (${data.current_commit} ➜ ${data.latest_commit}). Lancez 'git pull' pour l'appliquer.`, 'info', 6000);
-            };
-        }
-    } catch (e) {
-        pill.textContent = 'v2.1';
-    }
-}
-
-// Slow-Motion Mouse-Following Physics Engine (T12)
-function initSlowMotionMouseEngine() {
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        return;
-    }
-
-    const halo = document.getElementById('slowmo-halo');
-    const glyphs = Array.from(document.querySelectorAll('.slowmo-glyph'));
-    const pulseBubble = document.getElementById('slowmo-pulse-bubble');
-
-    let targetX = window.innerWidth * 0.5;
-    let targetY = window.innerHeight * 0.5;
-    let currentX = targetX;
-    let currentY = targetY;
-    let slowX = targetX;
-    let slowY = targetY;
-
-    // Silky slow-motion interpolation factors
-    const LERP_PRIMARY = 0.035;
-    const LERP_DEEP = 0.018;
-
-    window.addEventListener('mousemove', (e) => {
-        targetX = e.clientX;
-        targetY = e.clientY;
-    }, { passive: true });
-
-    function animateSlowMo() {
-        currentX += (targetX - currentX) * LERP_PRIMARY;
-        currentY += (targetY - currentY) * LERP_PRIMARY;
-        slowX += (targetX - slowX) * LERP_DEEP;
-        slowY += (targetY - slowY) * LERP_DEEP;
-
-        const normX = (currentX / Math.max(1, window.innerWidth)) - 0.5;
-        const normY = (currentY / Math.max(1, window.innerHeight)) - 0.5;
-
-        if (halo) {
-            halo.style.transform = `translate3d(${currentX - 260}px, ${currentY - 260}px, 0)`;
-        }
-
-        glyphs.forEach((g, idx) => {
-            const depth = parseFloat(g.dataset.depth || '0.03');
-            const offsetX = (slowX - window.innerWidth * 0.5) * depth * 12;
-            const offsetY = (slowY - window.innerHeight * 0.5) * depth * 12;
-            const rot = (normX * 18) * (idx % 2 === 0 ? 1 : -1);
-            g.style.transform = `translate3d(${offsetX.toFixed(1)}px, ${offsetY.toFixed(1)}px, 0) rotate(${rot.toFixed(1)}deg)`;
-        });
-
-        // Interactive patience animation when pageLoader is visible
-        if (pulseBubble && pageLoader && !pageLoader.classList.contains('hidden')) {
-            const pullX = normX * 26;
-            const pullY = normY * 26;
-            pulseBubble.style.transform = `translate3d(${pullX.toFixed(1)}px, ${pullY.toFixed(1)}px, 0)`;
-        }
-
-        // Subtle 3D magnetic tilt on dropZone while upload section is visible
-        if (dropZone && uploadSection && !uploadSection.classList.contains('hidden')) {
-            const tiltX = (-normY * 4.5).toFixed(2);
-            const tiltY = (normX * 4.5).toFixed(2);
-            dropZone.style.transform = `perspective(1100px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
-        }
-
-        requestAnimationFrame(animateSlowMo);
-    }
-
-    requestAnimationFrame(animateSlowMo);
-}
-
-// Help & Keyboard Shortcuts Modal
-function initHelpModal() {
-    const btnHelp = document.getElementById('btn-help');
-    const modalHelp = document.getElementById('help-modal');
-    const btnCloseHelp = document.getElementById('btn-close-help');
-    const btnCloseHelpFooter = document.getElementById('btn-close-help-footer');
-
-    if (btnHelp && modalHelp) {
-        btnHelp.addEventListener('click', (e) => {
-            e.preventDefault();
-            modalHelp.classList.remove('hidden');
-        });
-    }
-    if (btnCloseHelp && modalHelp) {
-        btnCloseHelp.addEventListener('click', () => modalHelp.classList.add('hidden'));
-    }
-    if (btnCloseHelpFooter && modalHelp) {
-        btnCloseHelpFooter.addEventListener('click', () => modalHelp.classList.add('hidden'));
-    }
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modalHelp && !modalHelp.classList.contains('hidden')) {
-            modalHelp.classList.add('hidden');
-        }
-    });
-}
-
-// Server Shutdown & Lifecycle Control (PC & Mobile/Android)
-function initShutdownControl() {
-    const btnOpenConfirm = document.getElementById('btn-open-shutdown-confirm');
-    const modalConfirm = document.getElementById('shutdown-confirm-modal');
-    const btnCancel = document.getElementById('btn-cancel-shutdown');
-    const btnConfirm = document.getElementById('btn-confirm-shutdown');
-    const shutdownScreen = document.getElementById('shutdown-screen');
-    const btnCheckUpdateSys = document.getElementById('btn-check-update-system');
-
-    if (btnOpenConfirm && modalConfirm) {
-        btnOpenConfirm.addEventListener('click', () => {
-            if (settingsModal) settingsModal.classList.add('hidden');
-            modalConfirm.classList.remove('hidden');
-        });
-    }
-
-    if (btnCancel && modalConfirm) {
-        btnCancel.addEventListener('click', () => {
-            modalConfirm.classList.add('hidden');
-        });
-    }
-
-    if (btnConfirm && modalConfirm && shutdownScreen) {
-        btnConfirm.addEventListener('click', async () => {
-            btnConfirm.disabled = true;
-            btnConfirm.textContent = 'Extinction en cours...';
-            try {
-                await fetch('/api/system/shutdown', { method: 'POST' });
-            } catch (e) {
-                // Network error expected when server stops immediately
-            }
-            modalConfirm.classList.add('hidden');
-            shutdownScreen.classList.remove('hidden');
-            showToast('Serveur local éteint avec succès.', 'info');
-        });
-    }
-
-    if (btnCheckUpdateSys) {
-        btnCheckUpdateSys.addEventListener('click', async () => {
-            btnCheckUpdateSys.disabled = true;
-            btnCheckUpdateSys.textContent = 'Vérification...';
-            await checkSystemUpdate();
-            btnCheckUpdateSys.disabled = false;
-            btnCheckUpdateSys.textContent = '🔄 Vérifier les mises à jour GitHub';
-        });
-    }
-}
-
-// Restore Active Session across Page Reloads (F5 Resilience)
-async function restoreActiveSessionOnLoad() {
-    let savedId = null;
-    try {
-        savedId = localStorage.getItem('active_manga_session');
-    } catch (e) {}
-
-    if (!savedId) return;
-
-    try {
-        const res = await fetch(`/api/session/${savedId}`);
-        if (!res.ok) {
-            localStorage.removeItem('active_manga_session');
-            return;
-        }
-
-        const data = await res.json();
-        activateSessionWorkspace(data);
-
-        // Check if translation is currently running or was finished
-        const statusRes = await fetch(`/api/status/${savedId}`);
-        if (statusRes.ok) {
-            const statusData = await statusRes.json();
-            if (statusData.status === 'translating') {
-                btnStart.classList.add('hidden');
-                progressBanner.classList.remove('hidden');
-                startPolling();
-                showToast(`Session "${data.filename}" restaurée · Traduction en cours reprise`, 'info', 3000);
-            } else if (statusData.status === 'finished') {
-                btnDownload.classList.remove('hidden');
-                btnDownload.onclick = () => {
-                    window.location.href = `/api/download/${savedId}`;
-                };
-                showToast(`Session "${data.filename}" restaurée ✓`, 'success', 2500);
-            } else {
-                showToast(`Session "${data.filename}" restaurée`, 'info', 2000);
-            }
-        }
-    } catch (err) {
-        console.warn("Impossible de restaurer la session précédente:", err);
-    }
-}
+  bind();
+  loadSettings();
+  const start = (location.hash || "#translate").slice(1);
+  go(["translate", "library", "guide"].includes(start) ? start : "translate");
+  requestAnimationFrame(moveIndicator);
+  heartbeat();
+  setInterval(heartbeat, 10000);
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/static/sw.js").catch(() => {});
+})();

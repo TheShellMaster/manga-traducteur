@@ -4,7 +4,7 @@ import re
 from typing import List, Tuple, Dict, Any, Optional
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
-from app.config import FONT_PATH
+from app.config import FONT_PATH, BUNDLED_FONTS_DIR
 
 
 def get_font_by_style(style_name: str = "default", size: int = 14) -> ImageFont.ImageFont:
@@ -20,12 +20,12 @@ def get_font_by_style(style_name: str = "default", size: int = 14) -> ImageFont.
         key = "bold"
 
     font_candidates = {
-        "bold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "comic": "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-        "sans": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "serif": "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+        "bold": "DejaVuSans-Bold.ttf",
+        "comic": "LiberationSans-Bold.ttf",
+        "sans": "DejaVuSans.ttf",
+        "serif": "DejaVuSerif-Bold.ttf",
     }
-    path = font_candidates.get(key, FONT_PATH)
+    path = str(BUNDLED_FONTS_DIR / font_candidates.get(key, "DejaVuSans-Bold.ttf"))
     if os.path.exists(path):
         try:
             return ImageFont.truetype(path, size)
@@ -377,6 +377,7 @@ def render_manga_page(
     fixed_font_size: Optional[int] = None,
     text_color: str = "#000000",
     mask_style: str = "smart",
+    mask_only: bool = False,
 ) -> Image.Image:
     """Renders translated text onto speech bubbles with smart border-preserving inpainting and diamond typography."""
     img = img.convert("RGB")
@@ -397,7 +398,7 @@ def render_manga_page(
 
     for b in blocks:
         text = str(b.get("fr") or b.get("translation") or b.get("text") or "").strip()
-        if not text:
+        if not text and not mask_only:
             continue
 
         box = b.get("box")
@@ -453,6 +454,9 @@ def render_manga_page(
             else:  # rounded
                 radius = min(14, int(min(box_w, box_h) * 0.25))
                 draw.rounded_rectangle(mask_rect, radius=radius, fill=(255, 255, 255))
+
+        if mask_only:
+            continue
 
         ref_scale = max(0.5, min(2.5, min(width, height) / 1400.0))
         dyn_min_size = max(8, round(10 * min(1.4, max(0.75, ref_scale))))

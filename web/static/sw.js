@@ -1,44 +1,19 @@
-// Manga Translator Studio - Service Worker (PWA Offline Shell & Cache)
-const CACHE_NAME = 'manga-translator-v2.1';
-const STATIC_ASSETS = [
-  '/',
-  '/static/css/style.css',
-  '/static/css/animations.css',
-  '/static/js/app.js',
-  '/static/js/animations.js',
-  '/static/manifest.json'
-];
+// Manga Translator Studio - service worker (network first, offline fallback for the shell only)
+const CACHE = "mts-v3";
+const SHELL = ["/", "/static/css/style.css?v=3", "/static/js/app.js?v=3", "/static/manifest.json"];
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    }).then(() => self.skipWaiting())
-  );
+self.addEventListener("install", (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
-
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((k) => {
-          if (k !== CACHE_NAME) {
-            return caches.delete(k);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
-  );
+self.addEventListener("activate", (e) => {
+  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
-
-self.addEventListener('fetch', (event) => {
-  // Only cache GET requests for static assets, never API calls or dynamic uploads
-  const url = new URL(event.request.url);
-  if (event.request.method === 'GET' && url.pathname.startsWith('/static/')) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        return cached || fetch(event.request);
-      })
-    );
-  }
+self.addEventListener("fetch", (e) => {
+  const url = new URL(e.request.url);
+  if (e.request.method !== "GET" || url.pathname.startsWith("/api/")) return;
+  e.respondWith(
+    fetch(e.request)
+      .then((r) => { const copy = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); return r; })
+      .catch(() => caches.match(e.request))
+  );
 });

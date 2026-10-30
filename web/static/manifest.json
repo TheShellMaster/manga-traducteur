@@ -1,12 +1,12 @@
 {
   "name": "Manga Translator Studio",
   "short_name": "MangaTranslator",
-  "description": "Application Cloud Vision moderne de traduction de mangas avec visualiseur split-view et zéro modèle local.",
+  "description": "Traduisez vos mangas directement dans les bulles.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#090d16",
-  "theme_color": "#6366f1",
+  "background_color": "#0c0d12",
+  "theme_color": "#0c0d12",
   "categories": ["books", "entertainment", "productivity"],
   "icons": [
     {

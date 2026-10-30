@@ -273,12 +273,8 @@ class CloudVisionClient:
         self.tgt_lang = tgt_lang
 
         if not self.api_key:
-            if self.provider == "anthropic":
-                self.api_key = os.environ.get("ANTHROPIC_API_KEY")
-            elif self.provider == "gemini":
-                self.api_key = os.environ.get("GEMINI_API_KEY")
-            elif self.provider == "openrouter":
-                self.api_key = os.environ.get("OPENROUTER_API_KEY")
+            if self.provider not in ("auto", ""):
+                self.api_key = os.environ.get(f"{self.provider.upper()}_API_KEY")
             else:
                 self.api_key = (
                     os.environ.get("GEMINI_API_KEY")
@@ -286,6 +282,9 @@ class CloudVisionClient:
                     or os.environ.get("OLLAMA_API_KEY")
                     or os.environ.get("NVIDIA_API_KEY")
                 )
+        if self.provider == "custom":
+            self.base_url = self.base_url or os.environ.get("CUSTOM_BASE_URL")
+            self.model = self.model or os.environ.get("CUSTOM_MODEL")
 
     def detect_and_translate(
         self,
