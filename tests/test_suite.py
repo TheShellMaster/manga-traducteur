@@ -504,9 +504,10 @@ def test_exponential_backoff_retry():
 
 
 def test_persistent_caching_and_library_endpoint(tmp_path):
-    from server import _load_cached_page_blocks, _save_cached_page_blocks, OUTPUT_DIR
+    import uuid
+    from server import _load_cached_page_blocks, _save_cached_page_blocks, OUTPUT_DIR, CACHE_DIR
 
-    fake_bytes = b"fake-manga-page-image-bytes-12345"
+    fake_bytes = f"fake-manga-page-image-bytes-{uuid.uuid4().hex}".encode()
     tgt_lang = "French"
 
     # 1. Verify initially not cached
@@ -524,14 +525,14 @@ def test_persistent_caching_and_library_endpoint(tmp_path):
     assert "cache" in model_label.lower()
 
     # 4. Test GET /api/library
-    dummy_out = OUTPUT_DIR / "sample_test_translated.cbz"
+    dummy_out = OUTPUT_DIR / f"sample_test_{uuid.uuid4().hex[:8]}_translated.cbz"
     dummy_out.write_bytes(b"dummy-cbz-content")
     try:
         res = client.get("/api/library")
         assert res.status_code == 200
         lib = res.json()
         assert "library" in lib
-        assert any(item["filename"] == "sample_test_translated.cbz" for item in lib["library"])
+        assert any(item["filename"] == dummy_out.name for item in lib["library"])
     finally:
         dummy_out.unlink(missing_ok=True)
 

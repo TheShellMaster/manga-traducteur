@@ -78,7 +78,7 @@ select:disabled {
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--border-color);
-    padding: 12px 24px;
+    padding: 0 24px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -87,27 +87,34 @@ select:disabled {
     top: 0;
     z-index: 50;
     box-shadow: var(--shadow-soft);
+    height: 64px;
+    min-height: 64px;
+    box-sizing: border-box;
 }
 
 .logo-group {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-shrink: 0;
 }
 
 .logo-badge {
     background: linear-gradient(135deg, #f43f5e, #8b5cf6);
     color: white;
     font-family: 'Bangers', cursive;
-    font-size: 22px;
-    padding: 6px 12px;
+    font-size: 20px;
+    padding: 4px 10px;
     border-radius: var(--radius-sm);
     box-shadow: 0 4px 14px rgba(244, 63, 94, 0.35);
+    line-height: 1.2;
 }
 
 .logo-text h1 {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
 }
 
 .logo-text h1 span {
@@ -118,6 +125,8 @@ select:disabled {
 .logo-text p {
     font-size: 11px;
     color: var(--text-secondary);
+    line-height: 1.2;
+    white-space: nowrap;
 }
 
 /* API Status Pills */
@@ -125,18 +134,20 @@ select:disabled {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
 }
 
 .status-pill {
     font-size: 11px;
     font-weight: 600;
-    padding: 4px 10px;
+    padding: 3px 9px;
     border-radius: 999px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     color: var(--text-secondary);
     transition: all 0.2s ease;
+    white-space: nowrap;
 }
 
 .status-pill.pill-ok {
@@ -154,6 +165,7 @@ select:disabled {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-shrink: 0;
 }
 
 /* Buttons */
@@ -162,7 +174,7 @@ select:disabled {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 8px 16px;
+    padding: 7px 14px;
     border-radius: var(--radius-sm);
     font-size: 13px;
     font-weight: 600;
@@ -171,6 +183,12 @@ select:disabled {
     transition: all 0.2s ease;
     text-decoration: none;
     white-space: nowrap;
+    flex-shrink: 0;
+    height: 36px;
+    max-height: 38px;
+    box-sizing: border-box;
+    position: relative;
+    overflow: hidden;
 }
 
 .btn-sm {
@@ -1186,8 +1204,33 @@ input:checked + .slider-round:before { transform: translateX(16px); }
 }
 
 /* ======================== */
-/* Responsive Mobile/Tablet */
+/* Responsive Breakpoints   */
 /* ======================== */
+@media (max-width: 1366px) {
+    .logo-text p {
+        display: none;
+    }
+}
+
+@media (max-width: 1100px) {
+    #pill-update {
+        display: none;
+    }
+    .header-actions {
+        gap: 6px;
+    }
+    .header-actions .btn {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 960px) {
+    .api-status-pills {
+        display: none;
+    }
+}
+
 @media (max-width: 768px) {
     .app-header {
         flex-direction: column;

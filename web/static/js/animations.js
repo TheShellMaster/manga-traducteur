@@ -229,14 +229,6 @@
             }
         }, { passive: true });
 
-        // Button Ripple Effect
-        document.addEventListener('click', (e) => {
-            const btn = e.target.closest('.btn');
-            if (btn && !btn.disabled) {
-                createButtonRipple(btn, e);
-            }
-        });
-
         // Image Transitions
         setupImageTransitions();
 
@@ -252,21 +244,6 @@
                 }
             }
         });
-    }
-
-    function createButtonRipple(btn, event) {
-        const rect = btn.getBoundingClientRect();
-        const ripple = document.createElement('span');
-        ripple.className = 'btn-ripple';
-        const diameter = Math.max(rect.width, rect.height);
-        const radius = diameter / 2;
-
-        ripple.style.width = ripple.style.height = `${diameter}px`;
-        ripple.style.left = `${event.clientX - rect.left - radius}px`;
-        ripple.style.top = `${event.clientY - rect.top - radius}px`;
-
-        btn.appendChild(ripple);
-        ripple.addEventListener('animationend', () => ripple.remove(), { once: true });
     }
 
     function setupImageTransitions() {

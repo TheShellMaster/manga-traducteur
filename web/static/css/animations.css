@@ -132,265 +132,48 @@ body.light-theme .slowmo-glyph {
 }
 
 /* --------------------------------------------------------------------------
-   2. Le Portail Holographique de Scanlation (.manga-portal-hero)
+   2. Manga Studio Hero Icon (.manga-hero-icon-wrap)
    -------------------------------------------------------------------------- */
 .drop-illustration {
-    perspective: 1200px;
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 155px;
-    margin-bottom: 12px;
+    min-height: 100px;
+    margin-bottom: 16px;
 }
 
-.manga-portal-hero {
-    position: relative;
-    width: 290px;
-    height: 135px;
-    transform-style: preserve-3d;
-    transform: rotateX(12deg) rotateY(-8deg);
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    will-change: transform;
-}
-
-.drop-zone:hover .manga-portal-hero {
-    transform: rotateX(4deg) rotateY(-2deg) scale(1.04);
-}
-
-/* Bandeau promotionnel manga (Obi) */
-.portal-obi {
-    position: absolute;
-    top: -12px;
-    left: 12px;
-    right: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 3px 8px;
-    background: #4f46e5;
-    border-radius: 4px;
-    z-index: 10;
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
-    font-size: 9.5px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: #ffffff;
-    pointer-events: none;
-}
-
-.portal-obi .obi-badge {
-    background: #312e81;
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-size: 8.5px;
-    text-transform: uppercase;
-}
-
-.portal-obi .obi-text {
-    opacity: 0.95;
-}
-
-/* Double Planche Manga */
-.portal-page-frame {
-    position: absolute;
-    inset: 0;
-    border-radius: 8px;
-    background: #ffffff;
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6),
-                0 0 0 1px rgba(255, 255, 255, 0.12);
-    overflow: hidden;
-    user-select: none;
-}
-
-.portal-side {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 6px;
-    background: #ffffff;
-}
-
-.portal-side-original {
-    z-index: 1;
-}
-
-.portal-side-translated {
-    z-index: 2;
-    clip-path: inset(0 0 0 calc(var(--laser-pos, 50%)));
-    background: #fafafa;
-}
-
-/* Panels Manga Intérieurs */
-.manga-panel {
-    border: 2px solid #0f172a;
-    border-radius: 3px;
-    position: relative;
-    overflow: hidden;
-    background: #ffffff;
-}
-
-.panel-top {
-    flex: 1.2;
+.manga-hero-icon-wrap {
+    width: 90px;
+    height: 90px;
     display: flex;
     align-items: center;
     justify-content: center;
+    border-radius: 22px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.16) 0%, rgba(139, 92, 246, 0.04) 70%, transparent 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+    animation: hero-icon-float 4s ease-in-out infinite alternate;
 }
 
-.panel-bottom {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 8px;
+body.light-theme .manga-hero-icon-wrap {
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.02) 70%, transparent 100%);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 }
 
-/* Trame Manga (Screentone) */
-.manga-screentone {
-    position: absolute;
-    inset: 0;
-    background-image: radial-gradient(#64748b 1px, transparent 1px);
-    background-size: 6px 6px;
-    opacity: 0.22;
-    pointer-events: none;
+.drop-zone:hover .manga-hero-icon-wrap {
+    transform: translateY(-4px) scale(1.05);
+    box-shadow: 0 16px 40px rgba(99, 102, 241, 0.3);
 }
 
-/* Bulles de Texte Manga */
-.manga-bubble {
-    position: relative;
-    background: #ffffff;
-    border: 1.5px solid #0f172a;
-    border-radius: 12px;
-    padding: 4px 8px;
-    box-shadow: 1px 2px 0 #0f172a;
-    z-index: 3;
+@keyframes hero-icon-float {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-6px); }
 }
 
-.manga-bubble span {
-    font-size: 11px;
-    font-weight: 800;
-    color: #0f172a;
-    white-space: nowrap;
-}
-
-.bubble-ja span {
-    font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
-}
-
-.bubble-fr span {
-    color: #4338ca;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-}
-
-.bubble-narration-ja,
-.bubble-narration-fr {
-    border-radius: 2px;
-    padding: 2px 6px;
-}
-
-.bubble-narration-ja span {
-    font-size: 9.5px;
-}
-
-.bubble-narration-fr span {
-    font-size: 9.5px;
-    color: #1e1b4b;
-}
-
-/* SFX Manga */
-.manga-sfx-ink {
-    font-size: 14px;
-    font-weight: 900;
-    color: #0f172a;
-    font-style: italic;
-    transform: rotate(-6deg);
-}
-
-.manga-sfx-glow {
-    font-size: 11px;
-    font-weight: 800;
-    color: #4f46e5;
-    letter-spacing: 0.05em;
-}
-
-/* Lame Laser Cyber-Scan Séparatrice */
-.portal-laser-blade {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: var(--laser-pos, 50%);
-    width: 3px;
-    transform: translateX(-50%);
-    background: linear-gradient(
-        to bottom,
-        #38bdf8 0%,
-        #ffffff 50%,
-        #818cf8 100%
-    );
-    box-shadow: 0 0 10px #38bdf8,
-                0 0 20px #818cf8;
-    z-index: 5;
-    pointer-events: none;
-}
-
-.laser-handle-glow {
-    position: absolute;
-    top: -4px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #38bdf8;
-    box-shadow: 0 0 8px #38bdf8;
-}
-
-.laser-flare-center {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #ffffff;
-    box-shadow: 0 0 12px #ffffff;
-}
-
-/* Onomatopées Énergétiques Flottantes autour du Portail */
-.portal-floating-sfx {
-    position: absolute;
-    font-size: 20px;
-    font-weight: 900;
-    font-style: italic;
-    color: rgba(148, 163, 184, 0.45);
-    user-select: none;
-    pointer-events: none;
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), color 0.3s ease;
-    will-change: transform;
-}
-
-.portal-floating-sfx.sfx-left {
-    top: 30%;
-    left: -34px;
-    transform: rotate(-12deg);
-}
-
-.portal-floating-sfx.sfx-right {
-    bottom: 24%;
-    right: -34px;
-    transform: rotate(10deg);
-}
-
-.drop-zone:hover .portal-floating-sfx.sfx-left {
-    transform: translate(-8px, -4px) rotate(-16deg);
-    color: #818cf8;
-}
-
-.drop-zone:hover .portal-floating-sfx.sfx-right {
-    transform: translate(8px, 4px) rotate(14deg);
-    color: #38bdf8;
+.manga-hero-svg {
+    filter: drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35));
 }
 
 /* --------------------------------------------------------------------------
