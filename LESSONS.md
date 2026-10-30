@@ -65,3 +65,13 @@ Ce fichier consigne les erreurs rencontrées, leur cause racine et la règle pr�
 - [2026-10-30] Règle UI absolue : interdiction de valider une interface sans capture Playwright réelle et vérification des dimensions d'éléments (getBoundingClientRect).
 - [2026-10-30] Sanity DOM : tout effet JS injectant des nœuds (ripples, halos) doit obligatoirement avoir un style CSS explicite (position: absolute), overflow: hidden sur le parent, et un timer de secours pour éviter l'accumulation infinie de nœuds orphelins.
 - [2026-10-30] Design Drop-Zone : privilégier la clarté, l'espace et l'élégance sobre. Proscrire les faux widgets 3D étriqués qui polluent visuellement la zone de glisser-déposer.
+
+---
+
+## 8. Refactorisation par Opus : Architecture Monoprocessus, Heartbeat Auto-Exit & UI Épurée
+- **Constat & Problème résolu** : Les ajouts successifs (système de tray icon séparé, contrôleurs Tkinter additionnels, fichiers d'animations CSS/JS injectant des spans dans le DOM) alourdissaient la base de code (+5 000 lignes) et multipliaient les risques de processus orphelins.
+- **Approche d'Opus retenue & intégrée** :
+  1. **Lanceur Monoprocessus (`app/launcher.py`)** : Si `pywebview` est disponible, ouverture en fenêtre native unique. Sinon, ouverture dans le navigateur avec un mécanisme de **Heartbeat (`POST /api/system/heartbeat`)** et watchdog (`_auto_exit_watchdog`) : dès que tous les onglets sont fermés pendant ~40 s, le serveur s'éteint tout seul.
+  2. **Bouton Quitter Direct** : Bouton d'alimentation rouge `#btn-quit` placé directement dans la barre supérieure de l'UI pour un arrêt immédiat.
+  3. **Purge du code mort** : Suppression des fichiers parasites `animations.css` et `animations.js`. Réduction de `style.css` à 367 lignes et `app.js` à 801 lignes.
+  4. **Embarquement des polices (`app/fonts/`)** : Dépendance zéro aux polices système `/usr/share/fonts` pour garantir la portabilité Windows, macOS et mobile.
