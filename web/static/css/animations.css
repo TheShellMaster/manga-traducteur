@@ -1,0 +1,695 @@
+/* ==========================================================================
+   Manga Translator Studio — Dedicated Animations & Visual FX Engine
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Backgrounds à Vibration & Trame Manga Énergétique
+   -------------------------------------------------------------------------- */
+.slowmo-ambient-stage {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+    contain: strict;
+}
+
+/* Grille de vibration manga (Trame à points vibrante) */
+.manga-vibration-grid {
+    position: absolute;
+    inset: -40px;
+    background-image: radial-gradient(rgba(139, 92, 246, 0.12) 1.5px, transparent 1.5px);
+    background-size: 28px 28px;
+    background-position: 0 0;
+    opacity: 0.75;
+    animation: manga-grid-vibrate 6s ease-in-out infinite alternate;
+    will-change: transform, opacity;
+}
+
+body.light-theme .manga-vibration-grid {
+    background-image: radial-gradient(rgba(59, 130, 246, 0.14) 1.5px, transparent 1.5px);
+    opacity: 0.6;
+}
+
+@keyframes manga-grid-vibrate {
+    0% {
+        transform: scale(1) rotate(0deg);
+        opacity: 0.65;
+    }
+    33% {
+        transform: scale(1.018) translate(2px, -3px) rotate(0.15deg);
+        opacity: 0.85;
+    }
+    66% {
+        transform: scale(0.99) translate(-2px, 2px) rotate(-0.1deg);
+        opacity: 0.7;
+    }
+    100% {
+        transform: scale(1.025) translate(3px, 1px) rotate(0.2deg);
+        opacity: 0.9;
+    }
+}
+
+/* Lignes de vitesse manga (Speedlines d'énergie subtiles) */
+.manga-speedlines {
+    position: absolute;
+    inset: 0;
+    background: repeating-conic-gradient(
+        from 0deg,
+        rgba(139, 92, 246, 0.02) 0deg 3deg,
+        transparent 3deg 15deg
+    );
+    opacity: 0.7;
+    animation: speedlines-spin 45s linear infinite;
+    mix-blend-mode: screen;
+}
+
+body.light-theme .manga-speedlines {
+    background: repeating-conic-gradient(
+        from 0deg,
+        rgba(59, 130, 246, 0.025) 0deg 3deg,
+        transparent 3deg 15deg
+    );
+    mix-blend-mode: multiply;
+}
+
+@keyframes speedlines-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Halo lumineux interactif slow-motion */
+.slowmo-halo {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 650px;
+    height: 650px;
+    border-radius: 50%;
+    background: radial-gradient(
+        circle,
+        rgba(139, 92, 246, 0.24) 0%,
+        rgba(59, 130, 246, 0.16) 35%,
+        rgba(236, 72, 153, 0.08) 55%,
+        rgba(15, 23, 42, 0) 75%
+    );
+    filter: blur(48px);
+    will-change: transform, opacity;
+    mix-blend-mode: screen;
+    pointer-events: none;
+    transition: opacity 0.8s ease-out;
+}
+
+body.light-theme .slowmo-halo {
+    background: radial-gradient(
+        circle,
+        rgba(99, 102, 241, 0.18) 0%,
+        rgba(59, 130, 246, 0.12) 38%,
+        rgba(244, 63, 94, 0.05) 58%,
+        rgba(248, 250, 252, 0) 75%
+    );
+    mix-blend-mode: multiply;
+}
+
+/* Particules & glyphes */
+.slowmo-particle-container {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.slowmo-glyph {
+    position: absolute;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    color: rgba(148, 163, 184, 0.13);
+    user-select: none;
+    will-change: transform;
+    transition: color 0.5s cubic-bezier(0.16, 1, 0.3, 1), text-shadow 0.5s ease;
+    text-shadow: 0 0 24px rgba(139, 92, 246, 0.2);
+}
+
+body.light-theme .slowmo-glyph {
+    color: rgba(71, 85, 105, 0.11);
+    text-shadow: 0 0 16px rgba(59, 130, 246, 0.15);
+}
+
+/* Onomatopées Manga Vibrantes (Objets visuels animés) */
+.manga-sfx-badge {
+    position: absolute;
+    font-family: 'Bangers', 'Plus Jakarta Sans', cursive, sans-serif;
+    font-size: 26px;
+    letter-spacing: 2px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: rgba(17, 24, 39, 0.82);
+    border: 2px solid rgba(139, 92, 246, 0.4);
+    color: #e2e8f0;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5), 0 0 15px rgba(139, 92, 246, 0.3);
+    user-select: none;
+    will-change: transform;
+    backdrop-filter: blur(6px);
+}
+
+.manga-sfx-badge.sfx-1 {
+    top: 28%;
+    left: 6%;
+    color: #a78bfa;
+    border-color: rgba(167, 139, 250, 0.6);
+    animation: sfx-rumble 2.6s ease-in-out infinite alternate;
+}
+
+.manga-sfx-badge.sfx-2 {
+    bottom: 26%;
+    right: 8%;
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.6);
+    animation: sfx-pulse 2.2s ease-in-out infinite alternate;
+}
+
+.manga-sfx-badge.sfx-3 {
+    top: 55%;
+    left: 88%;
+    color: #f43f5e;
+    border-color: rgba(244, 63, 94, 0.6);
+    animation: sfx-shake 1.9s ease-in-out infinite;
+}
+
+@keyframes sfx-rumble {
+    0% { transform: translateY(0) rotate(-6deg); }
+    50% { transform: translateY(-8px) rotate(-4deg) scale(1.04); }
+    100% { transform: translateY(4px) rotate(-8deg); }
+}
+
+@keyframes sfx-pulse {
+    0% { transform: scale(0.98) rotate(4deg); }
+    100% { transform: scale(1.08) rotate(7deg); box-shadow: 0 0 25px rgba(56, 189, 248, 0.5); }
+}
+
+@keyframes sfx-shake {
+    0%, 100% { transform: translate(0, 0) rotate(2deg); }
+    20% { transform: translate(-3px, 2px) rotate(3deg); }
+    40% { transform: translate(3px, -2px) rotate(1deg); }
+    60% { transform: translate(-2px, -2px) rotate(3deg); }
+    80% { transform: translate(2px, 2px) rotate(2deg); }
+}
+
+.slowmo-particle {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, rgba(139, 92, 246, 0.45) 50%, transparent 100%);
+    box-shadow: 0 0 14px rgba(139, 92, 246, 0.5);
+    pointer-events: none;
+    will-change: transform, opacity;
+}
+
+/* --------------------------------------------------------------------------
+   2. Objet Animé Concret : Livre Manga 3D avec Pages qui Tournent
+   -------------------------------------------------------------------------- */
+.drop-illustration {
+    perspective: 900px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 120px;
+    margin-bottom: 12px;
+}
+
+.manga-book-3d {
+    position: relative;
+    width: 90px;
+    height: 110px;
+    transform-style: preserve-3d;
+    transform: rotateX(24deg) rotateY(-20deg) rotateZ(4deg);
+    transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1);
+    animation: book-hover 4.5s ease-in-out infinite alternate;
+}
+
+.drop-zone:hover .manga-book-3d {
+    transform: rotateX(12deg) rotateY(-8deg) rotateZ(0deg) scale(1.12);
+}
+
+@keyframes book-hover {
+    0% { transform: translateY(0) rotateX(24deg) rotateY(-20deg) rotateZ(4deg); }
+    100% { transform: translateY(-12px) rotateX(20deg) rotateY(-14deg) rotateZ(2deg); }
+}
+
+.book-cover {
+    position: absolute;
+    inset: 0;
+    border-radius: 4px 10px 10px 4px;
+    box-shadow: 0 12px 25px rgba(0, 0, 0, 0.5);
+}
+
+.book-cover-back {
+    background: linear-gradient(135deg, #4338ca, #6d28d9);
+    transform: translateZ(-8px);
+}
+
+.book-cover-front {
+    background: linear-gradient(135deg, #f43f5e, #8b5cf6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: left center;
+    transform: translateZ(4px) rotateY(-18deg);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    animation: cover-flutter 3.8s ease-in-out infinite alternate;
+}
+
+@keyframes cover-flutter {
+    0% { transform: translateZ(4px) rotateY(-18deg); }
+    100% { transform: translateZ(4px) rotateY(-36deg); }
+}
+
+.book-kanji {
+    font-size: 38px;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.book-page {
+    position: absolute;
+    inset: 3px 4px 3px 6px;
+    background: #f8fafc;
+    border-radius: 2px 6px 6px 2px;
+    transform-origin: left center;
+    box-shadow: inset -2px 0 6px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.25);
+    background-image: repeating-linear-gradient(
+        transparent,
+        transparent 8px,
+        rgba(100, 116, 139, 0.2) 8px,
+        rgba(100, 116, 139, 0.2) 10px
+    );
+}
+
+.book-page-1 {
+    transform: translateZ(2px) rotateY(-12deg);
+    animation: page-flip-1 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.book-page-2 {
+    transform: translateZ(0px) rotateY(-8deg);
+    animation: page-flip-2 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite 0.4s;
+}
+
+.book-page-3 {
+    transform: translateZ(-3px) rotateY(-4deg);
+    animation: page-flip-3 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite 0.8s;
+}
+
+@keyframes page-flip-1 {
+    0% { transform: translateZ(2px) rotateY(-10deg); }
+    50% { transform: translateZ(2px) rotateY(-75deg); }
+    100% { transform: translateZ(2px) rotateY(-10deg); }
+}
+
+@keyframes page-flip-2 {
+    0% { transform: translateZ(0px) rotateY(-8deg); }
+    50% { transform: translateZ(0px) rotateY(-65deg); }
+    100% { transform: translateZ(0px) rotateY(-8deg); }
+}
+
+@keyframes page-flip-3 {
+    0% { transform: translateZ(-3px) rotateY(-4deg); }
+    50% { transform: translateZ(-3px) rotateY(-50deg); }
+    100% { transform: translateZ(-3px) rotateY(-4deg); }
+}
+
+/* --------------------------------------------------------------------------
+   3. Des Cartes d'Images & Formats avec Effets 3D Holographiques
+   -------------------------------------------------------------------------- */
+.format-card {
+    position: relative;
+    border-radius: 12px;
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    overflow: hidden;
+    transform-style: preserve-3d;
+    transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+                box-shadow 0.25s ease,
+                border-color 0.25s ease;
+    will-change: transform;
+}
+
+.format-card::before {
+    content: '';
+    position: absolute;
+    inset: -50%;
+    background: conic-gradient(
+        from 180deg at 50% 50%,
+        transparent 0deg,
+        rgba(139, 92, 246, 0.25) 60deg,
+        rgba(56, 189, 248, 0.25) 120deg,
+        transparent 180deg
+    );
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+    animation: holo-rotate 4s linear infinite;
+}
+
+.format-card:hover::before {
+    opacity: 1;
+}
+
+.format-card:hover {
+    transform: translateY(-5px) scale(1.04);
+    border-color: rgba(139, 92, 246, 0.6);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5),
+                0 0 20px rgba(139, 92, 246, 0.35);
+}
+
+@keyframes holo-rotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Vignettes miniatures d'images avec reflets 3D & halo */
+.thumbnail-item {
+    position: relative;
+    overflow: hidden;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+                box-shadow 0.25s ease,
+                border-color 0.25s ease;
+    will-change: transform;
+}
+
+.thumbnail-item::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -120%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.22),
+        transparent
+    );
+    transform: skewX(-20deg);
+    transition: none;
+    pointer-events: none;
+}
+
+.thumbnail-item:hover::after {
+    animation: thumb-sheen 0.75s ease forwards;
+}
+
+@keyframes thumb-sheen {
+    0% { left: -120%; }
+    100% { left: 160%; }
+}
+
+.thumbnail-item:hover {
+    transform: translateY(-6px) scale(1.05);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.6),
+                0 0 22px rgba(139, 92, 246, 0.35);
+    border-color: rgba(139, 92, 246, 0.7);
+}
+
+.thumbnail-item.active {
+    transform: translateY(-4px) scale(1.04);
+    box-shadow: 0 0 0 2px #3b82f6,
+                0 10px 30px rgba(59, 130, 246, 0.5);
+    border-color: #3b82f6;
+}
+
+/* --------------------------------------------------------------------------
+   4. Animation d'Attente Interactive : Cyber-Scanner Laser Manga
+   -------------------------------------------------------------------------- */
+.page-loader {
+    backdrop-filter: blur(8px);
+    background: rgba(9, 13, 22, 0.78);
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    overflow: hidden;
+}
+
+/* Faisceau laser scanner qui balaye de haut en bas */
+.cyber-scanline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(
+        90deg,
+        rgba(56, 189, 248, 0) 0%,
+        rgba(56, 189, 248, 0.9) 20%,
+        rgba(255, 255, 255, 1) 50%,
+        rgba(167, 139, 250, 0.9) 80%,
+        rgba(167, 139, 250, 0) 100%
+    );
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.9),
+                0 0 32px rgba(139, 92, 246, 0.75),
+                0 0 50px rgba(255, 255, 255, 0.5);
+    animation: cyber-scan-sweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+    will-change: top, opacity;
+    z-index: 5;
+    pointer-events: none;
+}
+
+/* Voile lumineux accompagnant le laser */
+.cyber-scan-glow {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 120px;
+    background: linear-gradient(
+        to bottom,
+        rgba(56, 189, 248, 0.18),
+        transparent
+    );
+    animation: cyber-glow-sweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+    pointer-events: none;
+    z-index: 4;
+}
+
+@keyframes cyber-scan-sweep {
+    0% {
+        top: 2%;
+        opacity: 0.9;
+    }
+    100% {
+        top: 96%;
+        opacity: 0.95;
+    }
+}
+
+@keyframes cyber-glow-sweep {
+    0% {
+        top: 0%;
+        opacity: 0.8;
+    }
+    100% {
+        top: calc(96% - 120px);
+        opacity: 0.8;
+    }
+}
+
+/* Bulle interactive réactive au mouvement de souris */
+.pulse-bubble {
+    position: relative;
+    padding: 26px 42px;
+    background: rgba(17, 24, 39, 0.92);
+    border: 1px solid rgba(139, 92, 246, 0.6);
+    box-shadow: 0 16px 45px rgba(0, 0, 0, 0.75),
+                0 0 35px rgba(139, 92, 246, 0.35);
+    border-radius: 24px;
+    will-change: transform, box-shadow;
+    z-index: 10;
+    animation: slowmo-bubble-breathe 3.5s ease-in-out infinite alternate;
+    text-align: center;
+}
+
+@keyframes slowmo-bubble-breathe {
+    0% {
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(139, 92, 246, 0.25);
+        border-color: rgba(139, 92, 246, 0.4);
+    }
+    100% {
+        box-shadow: 0 18px 55px rgba(0, 0, 0, 0.8), 0 0 45px rgba(56, 189, 248, 0.5);
+        border-color: rgba(56, 189, 248, 0.7);
+    }
+}
+
+/* Anneaux de ripple/radar concentriques en arrière-plan */
+.slowmo-ripple-canvas {
+    position: absolute;
+    inset: -80px;
+    pointer-events: none;
+    z-index: 2;
+    overflow: visible;
+}
+
+.slowmo-ripple-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.5);
+    border-radius: 50%;
+    border: 2px solid rgba(139, 92, 246, 0.55);
+    opacity: 0.85;
+    pointer-events: none;
+    animation: slowmo-ripple-expand 3s cubic-bezier(0.1, 0.85, 0.25, 1) infinite;
+}
+
+.slowmo-ripple-ring:nth-child(2) {
+    animation-delay: 1s;
+    border-color: rgba(56, 189, 248, 0.5);
+}
+
+.slowmo-ripple-ring:nth-child(3) {
+    animation-delay: 2s;
+    border-color: rgba(244, 63, 94, 0.45);
+}
+
+@keyframes slowmo-ripple-expand {
+    0% {
+        transform: translate(-50%, -50%) scale(0.4);
+        opacity: 0.9;
+    }
+    60% {
+        opacity: 0.4;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(2.8);
+        opacity: 0;
+    }
+}
+
+/* Shimmer vibrant sur la barre de progression */
+.progress-bar-fill {
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.45) 50%,
+        transparent 100%
+    );
+    animation: slowmo-shimmer 2s infinite ease-in-out;
+}
+
+@keyframes slowmo-shimmer {
+    0% { left: -70%; }
+    100% { left: 160%; }
+}
+
+/* --------------------------------------------------------------------------
+   5. Fondu Soyeux des Pages & Effets Micro-Interactions
+   -------------------------------------------------------------------------- */
+.manga-page-fade {
+    animation: slowmo-crossfade 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slowmo-crossfade {
+    0% {
+        opacity: 0.3;
+        filter: blur(4px);
+    }
+    100% {
+        opacity: 1;
+        filter: blur(0);
+    }
+}
+
+/* Boutons avec onde de choc click */
+.btn {
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-ripple {
+    position: absolute;
+    border-radius: 50%;
+    transform: scale(0);
+    background: rgba(255, 255, 255, 0.35);
+    animation: slowmo-ripple-click 0.5s ease-out forwards;
+    pointer-events: none;
+}
+
+@keyframes slowmo-ripple-click {
+    to {
+        transform: scale(3.5);
+        opacity: 0;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   6. Accessibilité & Adaptabilité Mobile/Tactile
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    .slowmo-ambient-stage,
+    .slowmo-ripple-canvas,
+    .slowmo-ripple-ring,
+    .slowmo-particle,
+    .cyber-scanline,
+    .cyber-scan-glow,
+    .manga-vibration-grid,
+    .manga-speedlines,
+    .manga-book-3d,
+    .manga-sfx-badge {
+        display: none !important;
+        animation: none !important;
+    }
+    
+    .drop-zone,
+    .format-card,
+    .thumbnail-item,
+    .pulse-bubble {
+        transform: none !important;
+        animation: none !important;
+        transition: none !important;
+    }
+    
+    .manga-page-fade {
+        animation: none !important;
+    }
+}
+
+@media (pointer: coarse), (max-width: 768px) {
+    /* Écrans tactiles et mobiles : légèreté maximale */
+    .slowmo-halo {
+        opacity: 0.35;
+        width: 320px;
+        height: 320px;
+        filter: blur(28px);
+    }
+    
+    .manga-vibration-grid {
+        opacity: 0.35;
+    }
+    
+    .manga-speedlines {
+        display: none;
+    }
+    
+    .drop-zone {
+        transform: none !important;
+    }
+    
+    .format-card:hover,
+    .thumbnail-item:hover {
+        transform: none !important;
+    }
+}

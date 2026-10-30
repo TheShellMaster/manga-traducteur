@@ -1,0 +1,38 @@
+[
+  {
+    "session_id": "08948c69",
+    "filename": "mini.cbz",
+    "format": "cbz",
+    "total_pages": 2,
+    "date": "2026-10-30 02:21",
+    "model": "mock/vision-v1",
+    "download_url": "/api/download/08948c69"
+  },
+  {
+    "session_id": "c1beff44",
+    "filename": "mini.cbz",
+    "format": "cbz",
+    "total_pages": 2,
+    "date": "2026-10-30 02:21",
+    "model": "mock/vision-v1",
+    "download_url": "/api/download/c1beff44"
+  },
+  {
+    "session_id": "chapter_41.5_fr",
+    "filename": "Otome_Game_Chapitre_41.5_FR.cbz",
+    "format": "cbz",
+    "total_pages": 3,
+    "date": "2026-10-30 02:21",
+    "model": "ollama-cloud/gemma4:31b + groq/qwen3.8-27b",
+    "download_url": "/api/download/chapter_41.5_fr"
+  },
+  {
+    "session_id": "a58ae4b0",
+    "filename": "mini.cbz",
+    "format": "cbz",
+    "total_pages": 2,
+    "date": "2026-10-30 02:19",
+    "model": "mock/vision-v1",
+    "download_url": "/api/download/a58ae4b0"
+  }
+]

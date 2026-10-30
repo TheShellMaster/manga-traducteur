@@ -6,6 +6,7 @@
     <title>Manga Translator Studio | AI Cloud Vision</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23f43f5e'/%3E%3Cstop offset='100%25' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='900' font-size='28'%3E漫%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/animations.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Bangers&display=swap" rel="stylesheet">
@@ -46,8 +47,10 @@
     <main class="app-main">
         <!-- 1. Drop Zone (Hidden once manga is loaded) -->
         <section id="upload-section" class="panel upload-panel">
-            <!-- Slow-Motion Interactive Mouse Halo & Floating Manga Glyphs -->
+            <!-- Slow-Motion Interactive Mouse Halo & Floating Manga Glyphs & Vibration Background -->
             <div id="slowmo-ambient-stage" class="slowmo-ambient-stage" aria-hidden="true">
+                <div class="manga-vibration-grid" id="manga-vibration-grid"></div>
+                <div class="manga-speedlines" id="manga-speedlines"></div>
                 <div id="slowmo-halo" class="slowmo-halo"></div>
                 <span class="slowmo-glyph" data-depth="1.4" style="top: 14%; left: 12%;">漫画</span>
                 <span class="slowmo-glyph" data-depth="0.8" style="top: 22%; left: 82%;">翻訳</span>
@@ -55,13 +58,26 @@
                 <span class="slowmo-glyph" data-depth="1.1" style="top: 74%; left: 84%;">✨</span>
                 <span class="slowmo-glyph" data-depth="0.6" style="top: 42%; left: 8%;">語</span>
                 <span class="slowmo-glyph" data-depth="1.5" style="top: 48%; left: 90%;">夢</span>
+                <!-- Manga Action Onomatopoeia -->
+                <span class="manga-sfx-badge sfx-1" data-depth="1.2">ゴゴゴ…</span>
+                <span class="manga-sfx-badge sfx-2" data-depth="1.8">ドドド！</span>
+                <span class="manga-sfx-badge sfx-3" data-depth="0.9">ズキューン</span>
             </div>
 
             <div id="drop-zone" class="drop-zone">
                 <input type="file" id="file-input" accept=".cbz,.cbr,.rar,.zip,.png,.jpg,.jpeg,.webp" class="file-input-hidden">
                 <input type="file" id="folder-input" webkitdirectory directory multiple class="file-input-hidden">
                 <div class="drop-illustration">
-                    <div class="manga-icon-animated" aria-hidden="true">📖</div>
+                    <!-- Concrete 3D Animated Manga Book with Flipping Pages -->
+                    <div class="manga-book-3d" id="manga-book-3d" aria-hidden="true">
+                        <div class="book-cover book-cover-back"></div>
+                        <div class="book-page book-page-3"></div>
+                        <div class="book-page book-page-2"></div>
+                        <div class="book-page book-page-1"></div>
+                        <div class="book-cover book-cover-front">
+                            <span class="book-kanji">漫</span>
+                        </div>
+                    </div>
                 </div>
                 <h2>Glissez-déposez votre Manga ici</h2>
                 <p>Importez vos chapitres complets ou pages individuelles en un clic</p>
@@ -197,8 +213,10 @@
                         <div class="column-header">Traduction (<span id="lbl-tgt-lang">Français</span>)</div>
                         <div class="image-wrapper">
                             <img id="img-translated" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Page Traduite">
-                            <!-- Overlay loading patience animation (follows mouse in slow-motion) -->
+                            <!-- Overlay loading patience animation with Cyber-Scanner Laser FX & Radar -->
                             <div id="page-loader" class="page-loader hidden">
+                                <div class="cyber-scanline" aria-hidden="true"></div>
+                                <div class="cyber-scan-glow" aria-hidden="true"></div>
                                 <div class="pulse-bubble" id="slowmo-pulse-bubble">
                                     <div class="spinner-dots">
                                         <span></span><span></span><span></span>
@@ -420,5 +438,6 @@
 
     <!-- Script -->
     <script src="/static/js/app.js"></script>
+    <script src="/static/js/animations.js"></script>
 </body>
 </html>
