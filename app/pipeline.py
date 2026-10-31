@@ -18,13 +18,23 @@ def run_translation_pipeline(
     provider: str = "auto",
     max_side: int = 1600,
     target_lang: str = "French",
+    use_refiner: Optional[bool] = None,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> Path:
-    """End-to-end translation pipeline for manga archives, folders, and images."""
+    """End-to-end translation pipeline for manga archives, folders, and images.
+
+    use_refiner: optional stylistic second pass. If None, reads REFINER_ENABLED
+    from .env (disabled by default). A single translation model is enough for
+    most users; the refiner only polishes phrasing when explicitly enabled.
+    """
     load_env()
     src = Path(input_path).expanduser().resolve()
     if not src.exists():
         raise FileNotFoundError(f"Fichier ou dossier source introuvable : {src}")
+
+    # Refiner is OPT-IN: one good translation pass is the default.
+    if use_refiner is None:
+        use_refiner = os.environ.get("REFINER_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
 
     # Determine default output path if not specified
     if output_path is None:
@@ -55,10 +65,11 @@ def run_translation_pipeline(
 
             img = item.get_image()
             try:
-                # Detection + Translation via free Cloud API
+                # Detection + Translation via Cloud API
                 blocks, model_used = client.detect_and_translate(img, max_side=max_side)
-                # Fast refinement via Groq if available
-                refine_translations_with_groq(blocks, target_lang=target_lang)
+                # OPTIONAL stylistic refinement (only if user enabled it)
+                if use_refiner:
+                    refine_translations_with_groq(blocks, target_lang=target_lang)
                 # Render translated text onto image
                 rendered = render_manga_page(img, blocks)
                 rendered_images[item.relative_name] = rendered

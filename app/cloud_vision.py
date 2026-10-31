@@ -17,11 +17,20 @@ from app.config import (
     PROVIDER_PRESETS,
 )
 
+# Speech register presets: how the French translation should sound.
+# Exposed to the UI so users pick a tone instead of getting "forced" prose.
+REGISTER_PRESETS = {
+    "standard": "natural, everyday spoken French — the way people actually talk",
+    "familier": "casual, relaxed spoken French with light slang where it fits the characters",
+    "soutenu": "refined, literary French with polished phrasing",
+}
+
 
 def build_system_prompt(
     src_lang: str = "Japanese",
     tgt_lang: str = "French",
     context_history: Optional[List[Dict[str, str]]] = None,
+    register: str = "standard",
 ) -> str:
     ctx_block = ""
     if context_history:
@@ -31,6 +40,7 @@ def build_system_prompt(
             + json.dumps(recent, ensure_ascii=False)
             + "\n"
         )
+    register_desc = REGISTER_PRESETS.get(register, REGISTER_PRESETS["standard"])
     return f"""You are an expert manga and comic translator.
 Analyze this manga page image and detect every speech bubble, thought bubble, caption, narration box, and readable text block.
 {ctx_block}
@@ -43,7 +53,7 @@ Return ONLY a valid JSON array, with no surrounding markdown or commentary:
     "h": 120,
     "type": "speech",
     "original": "<original {src_lang} text>",
-    "translation": "<natural spoken {tgt_lang} translation>"
+    "translation": "<natural {tgt_lang} translation>"
   }}
 ]
 
@@ -53,9 +63,12 @@ Rules:
    - w, h: width and height of the text block (x + w <= 1000, y + h <= 1000)
    - "type": one of "speech", "thought", "narration", "sfx"
 2. Follow standard manga reading order: right-to-left, top-to-bottom.
-3. Translate into natural, fluent, idiomatic spoken {tgt_lang} suitable for comic speech bubbles.
-4. Ignore tiny watermarks, page numbers, credits, or scanlation logos.
-5. Strictly output ONLY the JSON array."""
+3. Translate into {register_desc}.
+4. NEVER translate word-for-word. If a literal rendering would sound stiff, awkward or "translated" in {tgt_lang}, rephrase freely the way a native speaker would actually say it, while staying faithful to the meaning, tone and emotion of the original.
+5. Adapt idioms, jokes and exclamations to their natural {tgt_lang} equivalent instead of calquing them.
+6. Keep each translation concise so it fits inside the bubble; short lines are better than long ones.
+7. Ignore tiny watermarks, page numbers, credits, or scanlation logos.
+8. Strictly output ONLY the JSON array."""
 
 
 def encode_image_for_vision(img: Image.Image, max_side: int = 1600) -> Tuple[bytes, str]:
@@ -292,14 +305,20 @@ class CloudVisionClient:
         model: Optional[str] = None,
         src_lang: str = "Japanese",
         tgt_lang: str = "French",
+        register: Optional[str] = None,
+        preferred_provider: Optional[str] = None,
     ):
         load_env()
+        # Backward-compatible alias: older callers pass preferred_provider=
+        if preferred_provider and provider == "auto":
+            provider = preferred_provider
         self.provider = (provider or "auto").lower()
         self.api_key = api_key
         self.base_url = base_url
         self.model = model
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
+        self.register = (register or os.environ.get("REGISTER") or "standard").strip().lower()
 
         if not self.api_key:
             if self.provider not in ("auto", ""):
@@ -323,7 +342,7 @@ class CloudVisionClient:
     ) -> Tuple[List[Dict[str, Any]], str]:
         """Performs vision translation via configured or auto provider with automatic fallback."""
         raw_bytes, b64_str = encode_image_for_vision(img, max_side=max_side)
-        prompt = build_system_prompt(self.src_lang, self.tgt_lang, context_history=context_history)
+        prompt = build_system_prompt(self.src_lang, self.tgt_lang, context_history=context_history, register=self.register)
         errors: List[str] = []
 
         # 1. Explicit Custom / Specific provider requested by user (Groq, OpenRouter, NVIDIA, Custom, OpenAI, Mistral)
