@@ -142,3 +142,12 @@ Ce fichier consigne les erreurs rencontrées, leur cause racine et la règle pr�
   1. Synchronisation complète de bout en bout : Backend (`server.py`), Frontend (`index.html`, `app.js`, `style.css`) et tests unitaires / E2E.
   2. Double niveau de contrôle ergonomique : sélecteur direct dans la barre Studio (changement immédiat à la volée) et valeur par défaut dans la modale Paramètres (onglet « Langues & Style »).
   3. Strict respect de l'isolation opt-in : le raffineur Groq n'est déclenché que si `use_refiner: true` ou `REFINER_ENABLED=true`, protégeant les quotas et les temps de réponse.
+
+---
+
+## 18. Élimination des Reliquats Visuels & Éléments Fantômes dans le DOM
+- **Problème** : Une colonne verticale d'emojis et de kanjis (`💬`, `巻`, `💭`, `話`, `🗯️`) apparaissait tout en haut à gauche de la page au-dessus du bandeau principal.
+- **Cause racine** : Un bloc `<div class="floating-bg">` et un overlay 3D factice avaient été insérés dans `index.html` lors d'une tentative précédente d'animations graphiques sans aucune règle CSS associée. Sans style CSS de positionnement, le navigateur affichait les nœuds enfants bruts en flux statique en haut de page.
+- **Correctif & Règle** :
+  1. Supprimer immédiatement tous les éléments décoratifs orphelins ou factices du DOM (`floating-bg`, `extract-anim-overlay`).
+  2. Règle stricte : Aucun élément HTML décoratif ou d'animation ne doit exister dans le template sans être lié à un composant CSS testé et validé visuellement via Playwright.
