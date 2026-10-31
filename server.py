@@ -383,6 +383,9 @@ def get_settings():
         "fixed_font_size": int(os.environ.get("FIXED_FONT_SIZE", 0)),
         "text_color": os.environ.get("TEXT_COLOR", "#000000"),
         "mask_style": os.environ.get("MASK_STYLE", "smart"),
+        "register": os.environ.get("REGISTER", "standard"),
+        "refiner_enabled": os.environ.get("REFINER_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on"),
+        "refiner_provider": os.environ.get("REFINER_PROVIDER", "groq"),
         "presets": PROVIDER_PRESETS,
         "configured": {
             p: bool(os.environ.get(f"{p.upper()}_API_KEY"))
@@ -395,7 +398,10 @@ def get_settings():
 async def save_settings(data: Dict[str, Any]):
     for k, v in data.items():
         if v is not None:
-            save_env_key(k.upper(), str(v))
+            if isinstance(v, bool):
+                save_env_key(k.upper(), "true" if v else "false")
+            else:
+                save_env_key(k.upper(), str(v))
     return {"status": "ok", "message": "Paramètres sauvegardés avec succès"}
 
 
@@ -768,13 +774,24 @@ def _translate_single_page(
                 context_history=context_history,
             )
             opts = options or {}
-            if opts.get("groq_refine") or opts.get("groq_api_key") or opts.get("provider") == "groq":
-                refine_translations_with_groq(
-                    blocks,
-                    groq_api_key=opts.get("groq_api_key"),
-                    target_lang=tgt_lang,
-                    context_history=context_history,
-                )
+            # Refiner is strictly opt-in (Rule 9: single model by default)
+            use_refiner = opts.get("use_refiner")
+            if use_refiner is None:
+                use_refiner = opts.get("refiner_enabled")
+            if use_refiner is None:
+                use_refiner = os.environ.get("REFINER_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+            else:
+                use_refiner = bool(use_refiner)
+
+            if use_refiner:
+                groq_key = opts.get("groq_api_key") or os.environ.get("GROQ_API_KEY")
+                if groq_key:
+                    refine_translations_with_groq(
+                        blocks,
+                        groq_api_key=groq_key,
+                        target_lang=tgt_lang,
+                        context_history=context_history,
+                    )
             _save_cached_page_blocks(raw_img_bytes, tgt_lang, blocks, model_name)
 
         # Live view: expose detected bubbles, then the cleaned page, before final typesetting
@@ -837,6 +854,7 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
     model = options.get("model") or None
     src_lang = options.get("src_lang", "Japanese")
     tgt_lang = options.get("tgt_lang", "French")
+    register = options.get("register") or os.environ.get("REGISTER", "standard")
     font_style = options.get("font_style", "bold")
     fixed_font_size = int(options.get("fixed_font_size", 0) or options.get("font_size", 0) or 0)
     text_color = options.get("text_color", "#000000")
@@ -848,6 +866,7 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
         "fixed_font_size": fixed_font_size,
         "text_color": text_color,
         "mask_style": mask_style,
+        "register": register,
     }
 
     client = CloudVisionClient(
@@ -857,6 +876,7 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
         model=model,
         src_lang=src_lang,
         tgt_lang=tgt_lang,
+        register=register,
     )
 
     image_items = session["image_items"]
@@ -1048,6 +1068,7 @@ def retranslate_single_page(session_id: str, page_idx: int, data: Optional[Dict[
     model = opts.get("model") or None
     src_lang = opts.get("src_lang", os.environ.get("SRC_LANG", "Japanese"))
     tgt_lang = opts.get("tgt_lang", os.environ.get("TGT_LANG", "French"))
+    register = opts.get("register") or os.environ.get("REGISTER", "standard")
     font_style = opts.get("font_style", os.environ.get("FONT_STYLE", "bold"))
     fixed_font_size = int(opts.get("fixed_font_size", os.environ.get("FIXED_FONT_SIZE", 0) or 0))
     text_color = opts.get("text_color", os.environ.get("TEXT_COLOR", "#000000"))
@@ -1060,6 +1081,7 @@ def retranslate_single_page(session_id: str, page_idx: int, data: Optional[Dict[
         model=model,
         src_lang=src_lang,
         tgt_lang=tgt_lang,
+        register=register,
     )
 
     res = _translate_single_page(

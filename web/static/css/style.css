@@ -131,6 +131,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .model-pick { display: flex; align-items: center; gap: 6px; }
 .model-pick-icon { font-size: 14px; color: var(--warn); }
 .model-pick select { max-width: 260px; font-size: 13px; font-weight: 500; }
+.register-pick { display: flex; align-items: center; gap: 6px; }
+.register-pick-icon { font-size: 14px; opacity: .8; }
+.register-pick select { max-width: 180px; font-size: 13px; font-weight: 500; }
 .top-actions { display: flex; align-items: center; gap: 6px; }
 
 .views { flex: 1; min-height: 0; position: relative; }
@@ -417,6 +420,10 @@ input[type=color] { width: 44px; height: 36px; border: 1px solid var(--line); bo
   .file-chip { max-width: 100%; flex: 1 1 100%; }
   .lang-pick { flex: 1 1 auto; }
   .lang-pick select { flex: 1; min-width: 0; }
+  .model-pick { flex: 1 1 auto; }
+  .model-pick select { max-width: 100%; width: 100%; }
+  .register-pick { flex: 1 1 auto; }
+  .register-pick select { max-width: 100%; width: 100%; }
   .toolbar-actions { margin-left: 0; flex: 1 1 100%; }
   .toolbar-actions .btn { flex: 1; }
   .workspace { display: flex; flex-direction: column; }

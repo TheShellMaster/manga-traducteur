@@ -132,3 +132,13 @@ Ce fichier consigne les erreurs rencontrées, leur cause racine et la règle pr�
   2. Aucun sous-agent orphelin ne doit être abandonné dans le dépôt.
   3. Le Bureau de l'utilisateur ne doit jamais être modifié sans demande expresse.
   4. Intégrer des endpoints backend dédiés pour purger le cache et les sessions en 1 clic.
+
+---
+
+## 17. Intégration Bout-en-Bout des Registres & Raffineur : Du Backend à l'Interface Utilisateur
+- **Problème** : Une refonte backend seule (telle que la PR #1) laissait l'interface inchangée, sans contrôle visuel ni réactivité pour l'utilisateur.
+- **Cause racine** : La persistance et l'exposition des nouveaux paramètres (`register`, `refiner_enabled`) n'étaient pas synchronisées entre FastAPI (`/api/settings`), les options du worker de traduction et les composants DOM du frontend.
+- **Correctif & Règle** :
+  1. Synchronisation complète de bout en bout : Backend (`server.py`), Frontend (`index.html`, `app.js`, `style.css`) et tests unitaires / E2E.
+  2. Double niveau de contrôle ergonomique : sélecteur direct dans la barre Studio (changement immédiat à la volée) et valeur par défaut dans la modale Paramètres (onglet « Langues & Style »).
+  3. Strict respect de l'isolation opt-in : le raffineur Groq n'est déclenché que si `use_refiner: true` ou `REFINER_ENABLED=true`, protégeant les quotas et les temps de réponse.

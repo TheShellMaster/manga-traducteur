@@ -109,6 +109,14 @@
               <span class="model-pick-icon" title="Modèle d'IA actif">⚡</span>
               <select id="studio-provider-select" aria-label="Fournisseur et modèle de vision IA"></select>
             </div>
+            <div class="register-pick">
+              <span class="register-pick-icon" title="Registre et style">💬</span>
+              <select id="studio-register-select" aria-label="Registre de langue" title="Registre de traduction">
+                <option value="standard">Standard (Naturel)</option>
+                <option value="familier">Familier (Shonen)</option>
+                <option value="soutenu">Soutenu (Noble)</option>
+              </select>
+            </div>
             <div class="toolbar-actions">
               <button class="btn ghost sm" id="btn-new">Nouveau</button>
               <button class="btn primary" id="btn-translate">Traduire</button>
@@ -275,7 +283,7 @@
       </div>
       <div class="settings-tabs" id="settings-tabs">
         <button class="active" data-stab="engine">Service de traduction</button>
-        <button data-stab="lang">Langues</button>
+        <button data-stab="lang">Langues & Style</button>
         <button data-stab="look">Apparence</button>
         <button data-stab="storage">Stockage & Mémoire</button>
       </div>
@@ -294,6 +302,27 @@
           <div class="field">
             <label for="set-tgt">Langue de traduction par défaut</label>
             <select id="set-tgt"></select>
+          </div>
+          <div class="field">
+            <label for="set-register">Style & Registre de langue</label>
+            <select id="set-register">
+              <option value="standard">🗣️ Standard — Français fluide, naturel et direct (Recommandé)</option>
+              <option value="familier">⚡ Familier — Style Shonen, répliques percutantes, argot léger</option>
+              <option value="soutenu">📜 Soutenu — Vouvoiement, phrasé noble (Seinen, historique)</option>
+            </select>
+            <p class="muted small">L'IA adapte le ton et les expressions sans jamais calquer le mot-à-mot.</p>
+          </div>
+          <div class="field" style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--line);">
+            <div class="row" style="justify-content: space-between; align-items: center; gap: 16px;">
+              <div>
+                <label for="set-refiner" style="margin: 0; font-weight: 600;">Raffinement stylistique supplémentaire (Groq)</label>
+                <p class="muted small" style="margin: 0.25rem 0 0 0;">Désactivé par défaut. Si activé, une seconde passe Groq relit et polit chaque bulle (consomme des requêtes API additionnelles).</p>
+              </div>
+              <label class="switch" style="flex-shrink: 0;" title="Activer ou désactiver la relecture par un second modèle">
+                <input type="checkbox" id="set-refiner">
+                <span></span>
+              </label>
+            </div>
           </div>
         </div>
 

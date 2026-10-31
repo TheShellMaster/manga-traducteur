@@ -194,10 +194,110 @@ def test_api_index_and_settings():
     assert r_get.status_code == 200
     data = r_get.json()
     assert "provider" in data
+    assert "register" in data
+    assert "refiner_enabled" in data
+    assert "refiner_provider" in data
 
-    r_post = client.post("/api/settings", json={"font_style": "bold"})
+    # Test updating register and refiner_enabled
+    r_post = client.post("/api/settings", json={"font_style": "bold", "register": "familier", "refiner_enabled": True})
     assert r_post.status_code == 200
     assert r_post.json()["status"] == "ok"
+
+    # Verify updated settings
+    r_get2 = client.get("/api/settings")
+    assert r_get2.status_code == 200
+    data2 = r_get2.json()
+    assert data2["register"] == "familier"
+    assert data2["refiner_enabled"] is True
+
+    # Reset back to standard & False
+    client.post("/api/settings", json={"register": "standard", "refiner_enabled": False})
+
+
+def test_refiner_opt_in_strictly_honored(monkeypatch):
+    import tempfile
+    import shutil
+    from server import _translate_single_page
+    from app.archives import ArchiveItem
+
+    called_refiner = []
+
+    def fake_refine(blocks, **kwargs):
+        called_refiner.append(True)
+
+    monkeypatch.setattr("server.refine_translations_with_groq", fake_refine)
+
+    fake_session = {
+        "session_dir": tempfile.mkdtemp(),
+        "total_pages": 1,
+        "image_items": [],
+        "pages": [{"status": "pending", "stage": "pending", "blocks": []}],
+        "translated_images": {},
+        "current_log": "",
+    }
+    img = Image.new("RGB", (200, 200), color="white")
+    fake_item = ArchiveItem(relative_name="p1.jpg", is_image=True)
+    fake_item.get_image = lambda: img.copy()
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    fake_item.raw_bytes = buf.getvalue()
+    fake_session["image_items"] = [fake_item]
+
+    fake_client = CloudVisionClient(provider="custom")
+    fake_client.detect_and_translate = lambda img, **kwargs: (
+        [{"ja": "こんにちは", "fr": "Bonjour", "box": (10, 10, 50, 50), "vertical": False}],
+        "FakeVision",
+    )
+
+    try:
+        # Case 1: refiner disabled -> must NOT call refiner
+        called_refiner.clear()
+        _translate_single_page(
+            session=fake_session,
+            idx=0,
+            client=fake_client,
+            tgt_lang="French",
+            font_style="bold",
+            fixed_font_size=0,
+            text_color="#000000",
+            mask_style="smart",
+            options={"use_refiner": False, "groq_api_key": "dummy_key"},
+            force_refresh=True,
+        )
+        assert len(called_refiner) == 0, "Refiner should NOT be called when use_refiner is False!"
+
+        # Case 2: refiner explicitly enabled -> MUST call refiner
+        called_refiner.clear()
+        _translate_single_page(
+            session=fake_session,
+            idx=0,
+            client=fake_client,
+            tgt_lang="French",
+            font_style="bold",
+            fixed_font_size=0,
+            text_color="#000000",
+            mask_style="smart",
+            options={"use_refiner": True, "groq_api_key": "dummy_key"},
+            force_refresh=True,
+        )
+        assert len(called_refiner) == 1, "Refiner MUST be called when use_refiner is True!"
+    finally:
+        shutil.rmtree(fake_session["session_dir"], ignore_errors=True)
+
+
+def test_cloud_vision_register_prompts():
+    from app.cloud_vision import build_system_prompt
+
+    prompt_std = build_system_prompt("Japanese", "French", register="standard")
+    assert "French" in prompt_std
+    assert "natural, everyday spoken French" in prompt_std
+    assert "NEVER translate word-for-word" in prompt_std
+
+    prompt_fam = build_system_prompt("Japanese", "French", register="familier")
+    assert "casual, relaxed spoken French" in prompt_fam
+
+    prompt_sou = build_system_prompt("Japanese", "French", register="soutenu")
+    assert "refined, literary French" in prompt_sou
 
 
 def test_api_upload_real_cbz_and_endpoints():

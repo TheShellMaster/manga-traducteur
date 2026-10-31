@@ -110,8 +110,12 @@
     $("#text-color").value = s.text_color || "#000000";
     const fixed = Number(s.fixed_font_size) || 0;
     setSizeMode(fixed > 0 ? "fixed" : "auto", fixed || 20);
+    if ($("#set-register")) $("#set-register").value = s.register || "standard";
+    if ($("#set-refiner")) $("#set-refiner").checked = Boolean(s.refiner_enabled);
     renderEngineSummary();
     renderProviders();
+    renderStudioModelPicker();
+    renderStudioRegisterPicker();
   }
 
   function engineReady() {
@@ -271,6 +275,25 @@
     };
   }
 
+  function renderStudioRegisterPicker() {
+    const sel = $("#studio-register-select");
+    if (!sel) return;
+    const current = (state.settings?.register || "standard").toLowerCase();
+    sel.value = current;
+    sel.onchange = async () => {
+      const reg = sel.value;
+      if (state.settings) state.settings.register = reg;
+      if ($("#set-register")) $("#set-register").value = reg;
+      try {
+        await api("/api/settings", { json: { register: reg } });
+        const labels = { standard: "Standard (Naturel)", familier: "Familier (Shonen)", soutenu: "Soutenu (Noble)" };
+        toast(`Style : ${labels[reg] || reg}`, "ok");
+      } catch (e) {
+        toast("Impossible d'enregistrer le registre.", "err");
+      }
+    };
+  }
+
   function renderProviders() {
     const s = state.settings;
     $("#providers").innerHTML = PROVIDERS.map((p) => {
@@ -396,15 +419,25 @@
   }
 
   async function saveSettings() {
-    const payload = { ...lookOptions(), src_lang: $("#set-src").value, tgt_lang: $("#set-tgt").value };
+    const payload = {
+      ...lookOptions(),
+      src_lang: $("#set-src").value,
+      tgt_lang: $("#set-tgt").value,
+      register: $("#set-register")?.value || "standard",
+      refiner_enabled: Boolean($("#set-refiner")?.checked),
+    };
     try {
       await api("/api/settings", { json: payload });
       $("#src-lang").value = payload.src_lang;
       $("#tgt-lang").value = payload.tgt_lang;
+      if ($("#studio-register-select")) {
+        $("#studio-register-select").value = payload.register;
+      }
       Object.assign(state.settings, payload);
       $("#save-state").textContent = "Enregistré";
       setTimeout(() => ($("#save-state").textContent = ""), 2000);
       closeModal($("#settings"));
+      toast("Paramètres enregistrés avec succès.", "ok");
     } catch (e) { toast(e.message, "err"); }
   }
 
@@ -728,9 +761,14 @@
   function translateOptions() {
     const s = state.settings;
     return {
-      provider: s.provider, model: s.selected_model,
+      provider: s.provider,
+      model: s.selected_model,
       base_url: s.provider === "custom" ? s.custom_base_url : undefined,
-      src_lang: $("#src-lang").value, tgt_lang: $("#tgt-lang").value,
+      src_lang: $("#src-lang").value,
+      tgt_lang: $("#tgt-lang").value,
+      register: $("#studio-register-select")?.value || s.register || "standard",
+      use_refiner: Boolean(s.refiner_enabled),
+      refiner_provider: s.refiner_provider || "groq",
       ...lookOptions(),
     };
   }
