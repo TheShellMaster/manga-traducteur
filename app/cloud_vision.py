@@ -17,11 +17,19 @@ from app.config import (
     PROVIDER_PRESETS,
 )
 
+# Speech register presets: how the French translation should sound.
+REGISTER_PRESETS = {
+    "standard": "natural, everyday spoken French — the way people actually talk",
+    "familier": "casual, relaxed spoken French with light slang where it fits the characters",
+    "soutenu": "refined, literary French with polished phrasing",
+}
+
 
 def build_system_prompt(
     src_lang: str = "Japanese",
     tgt_lang: str = "French",
     context_history: Optional[List[Dict[str, str]]] = None,
+    register: str = "standard",
 ) -> str:
     ctx_block = ""
     if context_history:
@@ -31,13 +39,17 @@ def build_system_prompt(
             + json.dumps(recent, ensure_ascii=False)
             + "\n"
         )
+    register_desc = REGISTER_PRESETS.get(register, REGISTER_PRESETS["standard"])
     return f"""You are an expert manga and comic translator.
 Analyze this manga page image and detect EVERY speech bubble, thought bubble, caption, narration box, and readable dialogue block.
 {ctx_block}
 CRITICAL INSTRUCTIONS:
 1. EXHAUSTIVE DETECTION: Scan the entire page thoroughly from top to bottom and right to left. Many pages contain between 6 and 20 dialogue bubbles across multiple panels (top, middle, and bottom). You MUST detect every single dialogue bubble on the page. Do NOT omit or truncate the bottom panels.
 2. Transcribe the ACTUAL text seen on the image into "original". DO NOT use placeholder text.
-3. Translate into natural, fluent, idiomatic spoken {tgt_lang} into "translation".
+3. Translate into {register_desc}.
+4. NEVER translate word-for-word. If a literal rendering would sound stiff, awkward or "translated" in {tgt_lang}, rephrase freely the way a native speaker would actually say it, while staying faithful to the meaning, tone and emotion of the original.
+5. Adapt idioms, jokes, and exclamations to their natural {tgt_lang} equivalent instead of calquing them.
+6. Keep each translation concise so it fits inside the bubble; short lines are better than long ones.
 
 Return ONLY a valid JSON array of objects:
 [
@@ -330,6 +342,7 @@ class CloudVisionClient:
         model: Optional[str] = None,
         src_lang: str = "Japanese",
         tgt_lang: str = "French",
+        register: Optional[str] = None,
         preferred_provider: Optional[str] = None,
     ):
         load_env()
@@ -341,6 +354,7 @@ class CloudVisionClient:
         self.model = model
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
+        self.register = (register or os.environ.get("REGISTER") or "standard").strip().lower()
 
         if not self.api_key:
             if self.provider not in ("auto", ""):
@@ -364,7 +378,7 @@ class CloudVisionClient:
     ) -> Tuple[List[Dict[str, Any]], str]:
         """Performs vision translation via configured or auto provider with automatic failover."""
         raw_bytes, b64_str = encode_image_for_vision(img, max_side=max_side)
-        prompt = build_system_prompt(self.src_lang, self.tgt_lang, context_history=context_history)
+        prompt = build_system_prompt(self.src_lang, self.tgt_lang, context_history=context_history, register=self.register)
         errors: List[str] = []
 
         def _try_openrouter(models: Optional[List[str]] = None) -> Optional[Tuple[List[Dict[str, Any]], str]]:

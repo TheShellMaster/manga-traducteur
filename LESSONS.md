@@ -104,3 +104,31 @@ Ce fichier consigne les erreurs rencontrées, leur cause racine et la règle pr�
 - **Symptôme** : Échec du décodage `json.loads` lorsque le LLM renvoie des séquences d'échappement terminal ANSI (`\x1b[...]`) autour ou à l'intérieur du JSON.
 - **Cause racine** : Le nettoyage ANSI n'était effectué que sur les champs texte `orig` et `trans` après le parsing JSON.
 - **Correctif & Règle** : Appliquer `re.sub(r"(?:\x1b|\\u001b)\[[0-9;]*[a-zA-Z]", "", raw)` directement sur le texte brut avant l'appel à `json.loads`.
+
+---
+
+## 14. Architecture Pipeline : Modèle Unique Direct & Raffineur Opt-In
+- **Problème** : Chaîner systématiquement deux modèles IA (Vision pour l'extraction puis LLM textuel Groq) doublait la latence (84 requêtes pour 42 pages) et gaspillait inutilement les quotas d'API.
+- **Cause racine** : Présomption qu'un modèle de vision ne sait pas traduire de façon naturelle sans un second modèle.
+- **Correctif & Règle** : Un bon modèle Vision multimodal moderne (Gemma 4, Qwen 2.5/3.8, Nemotron 3.5, GPT-4o) est pleinement autonome pour extraire et traduire en une seule passe. Tout raffineur stylistique secondaire (Groq) doit être strictement opt-in (`REFINER_ENABLED=false` par défaut).
+
+---
+
+## 15. Traduction Manga Idiomatique : Registres et Proscription des Calques
+- **Problème** : Les traductions littérales produisent un français rigide qui sonne artificiel et déborde des bulles de texte.
+- **Cause racine** : Absence de directives anti-calques et manque de contrôle du registre dans le prompt système.
+- **Correctif & Règle** :
+  1. Interdire formellement le mot-à-mot. Reformuler avec le naturel d'un locuteur natif tout en restant fidèle au sens et à l'émotion.
+  2. Adapter les idiomes, blagues et onomatopées vers leurs équivalents culturels au lieu de les calquer.
+  3. Privilégier la concision pour faciliter le lettrage dans les bulles.
+  4. Offrir le choix explicite du registre via `REGISTER_PRESETS` (`standard`, `familier`, `soutenu`).
+
+---
+
+## 16. Hygiène du Dépôt, Gestion de l'Espace Disque & Respect du Système Hôte
+- **Problème** : Les boucles de tests et sous-agents laissaient plus de 9 Go de répertoires temporaires (`data/sessions/`, `data/output/test_fr_*.cbz`, `.agents/teamwork/`) et créaient des raccourcis non sollicités sur le Bureau de l'utilisateur.
+- **Correctif & Règle** :
+  1. Les tests doivent nettoyer immédiatement leurs artefacts temporaires.
+  2. Aucun sous-agent orphelin ne doit être abandonné dans le dépôt.
+  3. Le Bureau de l'utilisateur ne doit jamais être modifié sans demande expresse.
+  4. Intégrer des endpoints backend dédiés pour purger le cache et les sessions en 1 clic.

@@ -32,6 +32,9 @@ LESSONS.md                 # Journal des erreurs rencontrées et correctifs appl
 6. **Découverte et validation des modèles IA** : *Les noms de modèles IA doivent être uniquement découverts via l'endpoint `/models` (ou `/v1/models`) du fournisseur et validés par un appel d'inférence réel avant d'être inscrits dans la configuration.*
 7. **Zéro modèle local** : Aucune dépendance d'inférence locale lourde (`torch`, `tesseract`, `onnxruntime`). Empreinte RAM cible < 50 Mo hors pic.
 8. **Journalisation continue** : Relire `LESSONS.md` avant chaque tâche et y ajouter `[date] erreur -> cause -> correction` à chaque bug rencontré.
+9. **Modèle Unique Autonome & Raffineur Opt-In** : Un modèle Vision multimodal moderne (Gemma 4, Qwen, Nemotron, GPT-4o) traduit directement en une seule passe. Ne jamais forcer un pipeline à deux modèles par défaut. Tout second passage stylistique est strictement optionnel (`REFINER_ENABLED=false` par défaut).
+10. **Traduction Manga Idiomatique & Registres (Zéro Calque)** : Proscrire la traduction mot-à-mot. Reformuler avec le naturel d'un locuteur natif, adapter les idiomes et blagues, privilégier la concision pour le lettrage des bulles, et supporter les 3 registres de langage (`standard`, `familier`, `soutenu`).
+11. **Hygiène du Workspace & Zéro Résidu** : Les suites de tests et scripts doivent nettoyer immédiatement leurs archives temporaires. Aucun dossier orphelin, aucun fichier doublon à la racine et aucun raccourci non sollicité sur le Bureau.
 
 ## 3. Checklist de Vérification Obligatoire (avant toute validation)
 Exécuter systématiquement ces 5 vérifications dans l'ordre :
