@@ -13,7 +13,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -37,8 +37,8 @@ app = FastAPI(title="Manga Translator Web Studio", version="2.1.0", lifespan=lif
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000", "http://[::1]:8000"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -53,6 +53,20 @@ CACHE_DIR = DATA_DIR / "cache"
 
 for d in (STATIC_DIR, TEMPLATES_DIR, DATA_DIR, SESSIONS_DIR, OUTPUT_DIR, CACHE_DIR):
     d.mkdir(parents=True, exist_ok=True)
+
+@app.middleware("http")
+async def reject_cross_origin_writes(request, call_next):
+    origin = request.headers.get("origin")
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and origin:
+        from urllib.parse import urlsplit
+        parsed = urlsplit(origin)
+        request_port = request.url.port or (443 if request.url.scheme == "https" else 80)
+        origin_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        if (parsed.scheme != request.url.scheme or parsed.hostname != request.url.hostname
+                or origin_port != request_port):
+            return JSONResponse({"detail": "Cross-origin request denied."}, status_code=403)
+    return await call_next(request)
+
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -355,14 +369,7 @@ def index():
 def get_settings():
     load_env()
     return {
-        "gemini_api_key": os.environ.get("GEMINI_API_KEY", ""),
-        "openrouter_api_key": os.environ.get("OPENROUTER_API_KEY", ""),
-        "groq_api_key": os.environ.get("GROQ_API_KEY", ""),
-        "openai_api_key": os.environ.get("OPENAI_API_KEY", ""),
-        "mistral_api_key": os.environ.get("MISTRAL_API_KEY", ""),
-        "nvidia_api_key": os.environ.get("NVIDIA_API_KEY", ""),
         "custom_base_url": os.environ.get("CUSTOM_BASE_URL", "https://openrouter.ai/api/v1"),
-        "custom_api_key": os.environ.get("CUSTOM_API_KEY", ""),
         "custom_model": os.environ.get("CUSTOM_MODEL", "nvidia/nemotron-3.5-super-vl:free"),
         "provider": os.environ.get("DEFAULT_PROVIDER", "auto"),
         "selected_model": os.environ.get("SELECTED_MODEL", ""),
@@ -374,17 +381,32 @@ def get_settings():
         "mask_style": os.environ.get("MASK_STYLE", "smart"),
         "presets": PROVIDER_PRESETS,
         "configured": {
-            p: bool(os.environ.get(f"{p.upper()}_API_KEY"))
+            p: bool(os.environ.get("CUSTOM_API_KEY" if p == "custom" else f"{p.upper()}_API_KEY"))
             for p in ("gemini", "openrouter", "groq", "openai", "mistral", "nvidia", "custom")
         },
     }
 
 
+_SETTING_KEYS = {
+    "gemini_api_key", "openrouter_api_key", "groq_api_key", "openai_api_key",
+    "mistral_api_key", "nvidia_api_key", "custom_api_key", "custom_base_url",
+    "custom_model", "default_provider", "selected_model", "src_lang", "tgt_lang",
+    "font_style", "fixed_font_size", "text_color", "mask_style",
+}
+
+
 @app.post("/api/settings")
 async def save_settings(data: Dict[str, Any]):
-    for k, v in data.items():
-        if v is not None:
-            save_env_key(k.upper(), str(v))
+    unknown = set(data) - _SETTING_KEYS
+    if unknown:
+        raise HTTPException(status_code=400, detail="Paramètre non autorisé.")
+    for key, value in data.items():
+        if value is None:
+            continue
+        value = str(value).strip()
+        if len(value) > 4096 or "\n" in value or "\r" in value or "\x00" in value:
+            raise HTTPException(status_code=400, detail="Valeur de paramètre invalide.")
+        save_env_key(key.upper(), value)
     return {"status": "ok", "message": "Paramètres sauvegardés avec succès"}
 
 
@@ -479,7 +501,7 @@ async def fetch_provider_models_api(payload: Dict[str, Any]):
                     d = resp.json()
                     for m in d.get("data", []):
                         mid = m.get("id", "")
-                        models_list.append({"id": mid, "label": f"{mid} (Groq LPU)", "is_free": True})
+                        models_list.append({"id": mid, "label": f"{mid} (Groq LPU)", "is_free": False})
                 else:
                     models_list = PROVIDER_PRESETS.get("groq", {}).get("models", [])
 
@@ -777,6 +799,15 @@ def _translate_single_page(
         return {"status": "error", "error": str(e)}
 
 
+def _translation_concurrency(options: Dict[str, Any], total: int) -> int:
+    """Default to one page at a time; clamp explicit parallelism to safe bounds."""
+    try:
+        requested = int(options.get("concurrency") or 1)
+    except (TypeError, ValueError):
+        requested = 1
+    return min(3, max(1, requested), max(1, total))
+
+
 def _run_translation_worker(session_id: str, options: Dict[str, Any]):
     session = sessions.get(session_id)
     if not session:
@@ -823,9 +854,10 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
     last_model = "Cloud Vision"
     completed_count = 0
 
-    # Multi-page parallel translation (concurrency = 2 or 3 workers)
-    concurrency = min(3, max(1, total))
-    concurrency = int(options.get("concurrency") or concurrency)
+    # Multi-page translation with sequential execution as the safe default.
+    # Keep provider requests page-scoped and sequential by default. Parallelism is
+    # an explicit opt-in because many free tiers enforce strict per-minute quotas.
+    concurrency = _translation_concurrency(options, total)
 
     session_dir = Path(session["session_dir"])
     pages_dir = session_dir / "pages"

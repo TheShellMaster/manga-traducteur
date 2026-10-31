@@ -504,9 +504,13 @@
     return `<span class="state-pill ${s}" title="${esc(label)}">${label}</span>`;
   }
 
+  function pageStatusLabel(page) {
+    return ({ pending: "En attente", processing: "En cours", done: "Traduite", error: "En erreur" })[page?.status] || "Original";
+  }
+
   function renderThumbs() {
     $("#page-list").innerHTML = state.pages.map((p, i) => `
-      <button class="thumb ${p.status}${i === state.cur ? " active" : ""}" data-i="${i}" style="animation-delay:${Math.min(i, 20) * 25}ms" aria-label="Page ${i + 1}">
+      <button class="thumb ${p.status}${i === state.cur ? " active" : ""}" data-i="${i}" style="animation-delay:${Math.min(i, 20) * 25}ms" aria-label="Page ${i + 1} — ${pageStatusLabel(p)}"${i === state.cur ? ' aria-current="page"' : ""}>
         <img loading="lazy" src="${imgUrl(i, p.status === "done" ? "translated" : "original")}" alt="">
         <span class="num">${i + 1}</span>
         ${stateBadgeHTML(p, i)}
@@ -518,6 +522,8 @@
     if (!el) return;
     const p = state.pages[i];
     el.className = `thumb ${p.status}${i === state.cur ? " active" : ""}`;
+    el.setAttribute("aria-label", `Page ${i + 1} — ${pageStatusLabel(p)}`);
+    if (i === state.cur) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current");
     const pill = el.querySelector(".state-pill");
     if (pill) {
       pill.outerHTML = stateBadgeHTML(p, i);
@@ -529,9 +535,25 @@
   }
 
   function setActiveThumb() {
-    $$(".thumb").forEach((t) => t.classList.toggle("active", Number(t.dataset.i) === state.cur));
+    $$(".thumb").forEach((t) => {
+      const active = Number(t.dataset.i) === state.cur;
+      t.classList.toggle("active", active);
+      if (active) t.setAttribute("aria-current", "page"); else t.removeAttribute("aria-current");
+    });
     const a = $(".thumb.active");
     if (a) a.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    $("#btn-prev").disabled = state.cur <= 0;
+    $("#btn-next").disabled = state.cur >= state.total - 1;
+  }
+
+  function updatePageIndicator() {
+    const p = state.pages[state.cur];
+    const modeLabel = state.anim === state.cur ? "Traduction en cours"
+      : state.mode === "slider" && p?.status === "done" ? "Original / traduit"
+      : state.mode === "translated" && p?.status === "done" ? "Traduction affichée" : "Original affiché";
+    $("#page-indicator").textContent = `Page ${state.cur + 1} sur ${state.total} · ${modeLabel} · ${pageStatusLabel(p)}`;
+    $("#img-base").alt = `Page ${state.cur + 1} — ${modeLabel.toLowerCase()}`;
+    $("#img-top").alt = state.mode === "slider" ? "Version traduite, superposée à l’original" : "Original affiché temporairement";
   }
 
   function loadImg(img, src) {
@@ -599,7 +621,7 @@
 
     base.classList.remove("loading");
     syncOverlay();
-    $("#page-indicator").textContent = `Page ${i + 1} sur ${state.total}`;
+    updatePageIndicator();
     $("#scanline").classList.toggle("on", p.status === "processing" && state.anim !== i);
     setActiveThumb();
     renderBubbles();
@@ -728,7 +750,9 @@
     $("#progress").classList.remove("hidden", "done");
     $("#live-badge").classList.remove("hidden");
     $("#progress-fill").style.width = "0%";
-    $("#progress-label").textContent = "Démarrage";
+    $("#progress-track").setAttribute("aria-valuenow", "0");
+    $("#progress-label").textContent = "Démarrage de la traduction";
+    $("#progress-count").textContent = `0 / ${state.total} traduites`;
     renderBubbles();
     state.poll = setInterval(pollStatus, 700);
     pollStatus();
@@ -746,11 +770,15 @@
     try { d = await api(`/api/status/${state.sid}`); } catch { return; }
     const prev = state.pages;
     state.pages = d.pages;
-    const done = d.pages.filter((p) => p.status === "done" || p.status === "error").length;
+    const translated = d.pages.filter((p) => p.status === "done").length;
+    const errors = d.pages.filter((p) => p.status === "error").length;
     $("#progress-fill").style.width = `${d.progress_percent}%`;
-    $("#progress-count").textContent = `${done} / ${d.total_pages}`;
+    if (state.anim !== state.cur) updatePageIndicator();
+    $("#progress-track").setAttribute("aria-valuenow", String(d.progress_percent));
+    $("#progress-count").textContent = `${translated} / ${d.total_pages} traduites${errors ? ` · ${errors} en erreur` : ""}`;
     const proc = d.pages.findIndex((p) => p.status === "processing");
-    $("#progress-label").textContent = proc >= 0 ? `Traduction de la page ${proc + 1}` : "Traduction";
+    const next = d.pages.findIndex((p) => p.status === "pending");
+    $("#progress-label").textContent = proc >= 0 ? `Traduction de la page ${proc + 1} sur ${d.total_pages}` : next >= 0 ? `À suivre : page ${next + 1} sur ${d.total_pages}` : "Traduction";
     d.pages.forEach((p, i) => { if (!prev[i] || prev[i].status !== p.status) updateThumb(i); });
 
     // keep the viewed page panel fresh when not animating it
@@ -810,7 +838,7 @@
     const base = $("#img-base"), top = $("#img-top");
     state.cur = i;
     setActiveThumb();
-    $("#page-indicator").textContent = `Page ${i + 1} sur ${state.total}`;
+    updatePageIndicator();
     await loadImg(base, imgUrl(i, "original"));
     top.classList.remove("show");
     syncOverlay();

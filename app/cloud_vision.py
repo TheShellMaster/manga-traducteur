@@ -372,7 +372,7 @@ class CloudVisionClient:
         # 3. Groq Cloud Vision provider (LPU Ultra-rapide)
         groq_key = (self.api_key if self.provider == "groq" else None) or os.environ.get("GROQ_API_KEY")
         if groq_key and self.provider != "groq":
-            for m in ("llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"):
+            for m in ("qwen/qwen3.8-27b",):
                 try:
                     blocks = self._call_openai_compatible(
                         b64_str=b64_str,

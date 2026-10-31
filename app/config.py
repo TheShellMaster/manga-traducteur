@@ -46,19 +46,30 @@ def load_env():
 
 
 def save_env_key(key: str, value: str):
-    """Save or update an API key in the workspace .env file."""
+    """Save a setting atomically in a private workspace .env file."""
+    ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
     lines = []
     found = False
     if ENV_PATH.exists():
         for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
             if line.strip().startswith(f"{key}=") or line.strip().startswith(f"export {key}="):
-                lines.append(f"{key}={value}")
-                found = True
+                if not found:
+                    lines.append(f"{key}={value}")
+                    found = True
             else:
                 lines.append(line)
     if not found:
         lines.append(f"{key}={value}")
-    ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    tmp_path = ENV_PATH.with_suffix(ENV_PATH.suffix + ".tmp")
+    fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.fchmod(fd, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as output:
+        output.write("\n".join(lines) + "\n")
+    os.replace(tmp_path, ENV_PATH)
+    try:
+        ENV_PATH.chmod(0o600)
+    except OSError:
+        pass
     os.environ[key] = value
 
 
@@ -100,10 +111,9 @@ PROVIDER_PRESETS = {
         "name": "Groq Cloud (Inférence Ultra-Rapide)",
         "base_url": "https://api.groq.com/openai/v1",
         "models": [
-            {"id": "llama-3.2-11b-vision-preview", "label": "Llama 3.2 11B Vision (Groq LPU)"},
-            {"id": "llama-3.2-90b-vision-preview", "label": "Llama 3.2 90B Vision (Groq LPU)"},
+            {"id": "qwen/qwen3.8-27b", "label": "Qwen 3.8 27B Vision (Groq)"},
         ],
-        "default_model": "llama-3.2-11b-vision-preview",
+        "default_model": "qwen/qwen3.8-27b",
     },
     "mistral": {
         "name": "Mistral AI (Modèles Pixtral)",

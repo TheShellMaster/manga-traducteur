@@ -95,8 +95,8 @@
           </div>
 
           <div class="progress hidden" id="progress">
-            <div class="progress-bar"><span id="progress-fill"></span></div>
-            <div class="progress-text"><span id="progress-label">Préparation</span><span id="progress-count"></span></div>
+            <div class="progress-bar" id="progress-track" role="progressbar" aria-label="Progression de la traduction" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="progress-fill"></span></div>
+            <div class="progress-text"><span id="progress-label" aria-live="polite">Préparation</span><span id="progress-count"></span></div>
           </div>
 
           <div class="workspace">
@@ -133,7 +133,7 @@
                   <span data-s="write">Réécriture</span>
                 </div>
               </div>
-              <div class="page-indicator"><span id="page-indicator">Page 1</span><span class="hint">Maintenez l'image pour voir l'original</span></div>
+              <div class="page-indicator"><span id="page-indicator" aria-live="polite">Page 1</span><span class="hint">Maintenez l'image pour voir l'original</span></div>
             </div>
 
             <aside class="bubbles" id="bubbles-panel">
