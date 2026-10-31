@@ -50,7 +50,7 @@ Return ONLY a valid JSON array, with no surrounding markdown or commentary:
 Rules:
 1. Bounding box coordinates (x, y, w, h) are normalized integers from 0 to 1000:
    - x, y: top-left corner of the text block (0-1000)
-   - w, h: width and height of the text block (x + w <= 1000, y + h <= 1000)
+   - w, h: width and height (x + w <= 1000, y + h <= 1000)
    - "type": one of "speech", "thought", "narration", "sfx"
 2. Follow standard manga reading order: right-to-left, top-to-bottom.
 3. Translate into natural, fluent, idiomatic spoken {tgt_lang} suitable for comic speech bubbles.
@@ -218,55 +218,6 @@ def parse_and_validate_blocks(raw_text: str) -> List[Dict[str, Any]]:
             try:
                 x = float(item["x"])
                 y = float(item["y"])
-                w = float(item["w"])
-                h = float(item["h"])
-            except (TypeError, ValueError):
-                continue
-            if w <= 0 or h <= 0:
-                continue
-            # Auto-disambiguate if model returned (x2, y2) instead of (w, h) causing x + w > 1000
-            if (x + w > 1000.0 and w > x and h > y) or (y + h > 1000.0 and h > y and w > x):
-                x0, y0, x1, y1 = x, y, w, h
-            else:
-                x0, y0, x1, y1 = x, y, x + w, y + h
-        # Case 3: array box / bbox / rect
-        else:
-            box = item.get("box") or item.get("bbox") or item.get("rect")
-            if not box or len(box) != 4:
-                continue
-            try:
-                x, y, w, h = [float(v) for v in box]
-            except (TypeError, ValueError):
-                continue
-            if w <= 0 or h <= 0:
-                continue
-            if (x + w > 1000.0 and w > x and h > y) or (y + h > 1000.0 and h > y and w > x):
-                x0, y0, x1, y1 = x, y, w, h
-            else:
-                x0, y0, x1, y1 = x, y, x + w, y + h
-
-        if x0 is None or y0 is None or x1 is None or y1 is None:
-            continue
-
-        # Inversion auto-correction if model inverted coordinates
-        if x0 > x1:
-            x0, x1 = x1, x0
-        if y0 > y1:
-            y0, y1 = y1, y0
-
-        # Strict boundary clamping within [0.0, 1000.0]
-        x0 = max(0.0, min(1000.0, x0))
-        y0 = max(0.0, min(1000.0, y0))
-        x1 = max(0.0, min(1000.0, x1))
-        y1 = max(0.0, min(1000.0, y1))
-
-        if x1 - x0 < 6 or y1 - y0 < 6:
-            continue
-        if not orig and not trans:
-            continue
-
-        # Sanitize control characters and normalize whitespace
-        orig = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", orig).strip()
         trans = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", trans).strip()
 
         valid_blocks.append({
@@ -301,16 +252,12 @@ class CloudVisionClient:
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
 
-        if not self.api_key:
-            if self.provider not in ("auto", ""):
-                self.api_key = os.environ.get(f"{self.provider.upper()}_API_KEY")
-            else:
-                self.api_key = (
-                    os.environ.get("GEMINI_API_KEY")
-                    or os.environ.get("OPENROUTER_API_KEY")
-                    or os.environ.get("OLLAMA_API_KEY")
-                    or os.environ.get("NVIDIA_API_KEY")
-                )
+        if not self.api_key and self.provider not in ("auto", ""):
+            env_key_name = "CUSTOM_API_KEY" if self.provider == "custom" else f"{self.provider.upper()}_API_KEY"
+            self.api_key = os.environ.get(env_key_name)
+        self.provider_key = self.api_key
+        if self.provider == "auto" and not self.api_key:
+            self.api_key = None
         if self.provider == "custom":
             self.base_url = self.base_url or os.environ.get("CUSTOM_BASE_URL")
             self.model = self.model or os.environ.get("CUSTOM_MODEL")
@@ -345,8 +292,8 @@ class CloudVisionClient:
                 print(f"[CloudVision] Échec sur {self.provider}/{target_model} ({e}). Basculement automatique vers les fournisseurs de secours configurés dans .env...")
 
         # 2. OpenRouter provider (Models: Nemotron 3.5, Qwen 2.5 VL 72B, Llama 3.2 11B)
-        or_key = (self.api_key if self.provider == "openrouter" else None) or os.environ.get("OPENROUTER_API_KEY")
-        if or_key and self.provider != "openrouter":  # if not already attempted above
+        or_key = os.environ.get("OPENROUTER_API_KEY") or (self.provider_key if self.provider == "openrouter" else None)
+        if or_key and self.provider != "openrouter":
             models_to_try = [self.model] if (self.model and "openrouter" in self.provider) else [
                 "nvidia/nemotron-3.5-super-vl:free",
                 "qwen/qwen-2.5-vl-72b-instruct",
@@ -370,181 +317,8 @@ class CloudVisionClient:
                         break
 
         # 3. Groq Cloud Vision provider (LPU Ultra-rapide)
-        groq_key = (self.api_key if self.provider == "groq" else None) or os.environ.get("GROQ_API_KEY")
-        if groq_key and self.provider != "groq":
+        groq_key = os.environ.get("GROQ_API_KEY") or (self.provider_key if self.provider == "groq" else None)
+        if groq_key and self.provider not in ("groq",):
             for m in ("qwen/qwen3.8-27b",):
                 try:
-                    blocks = self._call_openai_compatible(
-                        b64_str=b64_str,
-                        base_url="https://api.groq.com/openai/v1",
-                        api_key=groq_key,
-                        model_name=m,
-                        prompt=prompt,
-                    )
-                    return blocks, f"groq/{m}"
-                except Exception as exc:
-                    errors.append(f"Groq/{m}: {str(exc)[:140]}")
-                    if is_permanent_quota_error(exc):
-                        break
-
-        # 4. NVIDIA NIM Vision provider
-        nv_key = (self.api_key if self.provider == "nvidia" else None) or os.environ.get("NVIDIA_API_KEY")
-        if nv_key and self.provider != "nvidia":
-            for m in NVIDIA_NIM_VISION_MODELS:
-                try:
-                    blocks = self._call_openai_compatible(
-                        b64_str=b64_str,
-                        base_url="https://integrate.api.nvidia.com/v1",
-                        api_key=nv_key,
-                        model_name=m,
-                        prompt=prompt,
-                    )
-                    return blocks, f"nvidia-nim/{m}"
-                except Exception as exc:
-                    errors.append(f"NvidiaNIM/{m}: {str(exc)[:140]}")
-                    if is_permanent_quota_error(exc):
-                        break
-
-        # 5. Ollama Cloud provider
-        ollama_key = (self.api_key if self.provider == "ollama" else None) or os.environ.get("OLLAMA_API_KEY")
-        if ollama_key and self.provider != "ollama":
-            for m in ("gemma4:31b", "nemotron-3-nano:30b"):
-                try:
-                    blocks = self._call_openai_compatible(
-                        b64_str=b64_str,
-                        base_url="https://ollama.com/v1",
-                        api_key=ollama_key,
-                        model_name=m,
-                        prompt=prompt,
-                    )
-                    return blocks, f"ollama-cloud/{m}"
-                except Exception as exc:
-                    errors.append(f"OllamaCloud/{m}: {str(exc)[:140]}")
-
-        # 6. Native Anthropic (if configured in .env)
-        ant_key = (self.api_key if self.provider == "anthropic" else None) or os.environ.get("ANTHROPIC_API_KEY")
-        if ant_key and self.provider != "anthropic":
-            model = self.model or "claude-3-opus-20240229"
-            try:
-                blocks = self._call_anthropic(b64_str, ant_key, model, prompt)
-                return blocks, f"anthropic/{model}"
-            except Exception as e:
-                errors.append(f"Anthropic/{model}: {e}")
-
-        # 7. Google Gemini provider (ONLY if user explicitly configured GEMINI_API_KEY in .env)
-        gem_key = (self.api_key if self.provider == "gemini" else None) or os.environ.get("GEMINI_API_KEY")
-        if gem_key and self.provider != "gemini":
-            model = self.model or GEMINI_FREE_VISION_MODELS[0]
-            try:
-                blocks = self._call_gemini(raw_bytes, gem_key, model, prompt)
-                return blocks, f"gemini/{model}"
-            except Exception as e:
-                errors.append(f"Gemini/{model}: {e}")
-
-        raise RuntimeError("Échec Vision (" + " | ".join(errors) + ")")
-
-    def _call_anthropic(self, b64_str: str, api_key: str, model_name: str, prompt: str) -> List[Dict[str, Any]]:
-        """Calls Anthropic Claude vision API with exponential backoff on rate limits."""
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-
-        def _do_call():
-            response = client.messages.create(
-                model=model_name,
-                max_tokens=4000,
-                temperature=0.2,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",
-                                    "data": b64_str,
-                                },
-                            },
-                            {"type": "text", "text": prompt},
-                        ],
-                    }
-                ],
-            )
-            content = ""
-            for block in response.content:
-                if getattr(block, "text", None):
-                    content += block.text
-            return parse_and_validate_blocks(content)
-
-        return execute_with_backoff(_do_call)
-
-    def _call_gemini(self, image_bytes: bytes, api_key: str, model_name: str, prompt: str) -> List[Dict[str, Any]]:
-        """Calls Gemini via google.generativeai or google.genai with exponential backoff."""
-        def _do_call():
-            try:
-                import google.generativeai as genai
-                genai.configure(api_key=api_key)
-                gmodel = genai.GenerativeModel(model_name)
-                img_part = {"mime_type": "image/jpeg", "data": image_bytes}
-                response = gmodel.generate_content([img_part, prompt])
-                return parse_and_validate_blocks(response.text)
-            except Exception:
-                try:
-                    from google import genai
-                    from google.genai import types
-                    client = genai.Client(api_key=api_key)
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=[types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"), prompt],
-                    )
-                    return parse_and_validate_blocks(response.text)
-                except Exception as e:
-                    raise RuntimeError(f"Gemini API error ({model_name}): {e}")
-
-        return execute_with_backoff(_do_call)
-
-    def _call_openai_compatible(
-        self,
-        b64_str: str,
-        base_url: str,
-        api_key: str,
-        model_name: str,
-        prompt: str,
-    ) -> List[Dict[str, Any]]:
-        """Calls any OpenAI-compatible Vision endpoint with exponential backoff."""
-        from openai import OpenAI
-        client = OpenAI(
-            base_url=base_url,
-            api_key=api_key,
-            default_headers={
-                "User-Agent": "Mozilla/5.0",
-                "HTTP-Referer": "https://github.com/manga-translator",
-                "X-Title": "Manga Translator Web",
-            },
-            timeout=90,
-            max_retries=0,
-        )
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{b64_str}"},
-                    },
-                ],
-            }
-        ]
-
-        def _do_call():
-            resp = client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                temperature=0.2,
-                max_tokens=4000,
-            )
-            content = resp.choices[0].message.content or ""
-            return parse_and_validate_blocks(content)
-
-        return execute_with_backoff(_do_call)
+                    blocks

@@ -11,7 +11,6 @@ import tempfile
 import threading
 import time
 import uuid
-from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
@@ -26,67 +25,38 @@ from app.cloud_vision import CloudVisionClient
 from app.typesetter import render_manga_page
 from app.groq_refine import refine_translations_with_groq
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    load_env()
-    yield
-
-
-app = FastAPI(title="Manga Translator Web Studio", version="2.1.0", lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000", "http://[::1]:8000"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+# Application constants
 BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = BASE_DIR / "web" / "static"
-TEMPLATES_DIR = BASE_DIR / "web" / "templates"
 DATA_DIR = USER_DIR / "data"
 SESSIONS_DIR = DATA_DIR / "sessions"
 OUTPUT_DIR = DATA_DIR / "output"
 CACHE_DIR = DATA_DIR / "cache"
+HISTORY_FILE = USER_DIR / "history" / "sessions.json"
+TEMPLATES_DIR = BASE_DIR / "web" / "templates"
+STATIC_DIR = BASE_DIR / "web" / "static"
+for _dir in (DATA_DIR, SESSIONS_DIR, OUTPUT_DIR, CACHE_DIR, HISTORY_FILE.parent):
+    _dir.mkdir(parents=True, exist_ok=True)
 
-for d in (STATIC_DIR, TEMPLATES_DIR, DATA_DIR, SESSIONS_DIR, OUTPUT_DIR, CACHE_DIR):
-    d.mkdir(parents=True, exist_ok=True)
+app = FastAPI(title="Manga Translator Studio")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:8000", "http://localhost:8000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-@app.middleware("http")
-async def reject_cross_origin_writes(request, call_next):
-    origin = request.headers.get("origin")
-    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and origin:
-        from urllib.parse import urlsplit
-        parsed = urlsplit(origin)
-        request_port = request.url.port or (443 if request.url.scheme == "https" else 80)
-        origin_port = parsed.port or (443 if parsed.scheme == "https" else 80)
-        if (parsed.scheme != request.url.scheme or parsed.hostname != request.url.hostname
-                or origin_port != request_port):
-            return JSONResponse({"detail": "Cross-origin request denied."}, status_code=403)
-    return await call_next(request)
-
-
-# Mount static files
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-# In-memory session tracking
 sessions: Dict[str, Dict[str, Any]] = {}
 _session_state_lock = threading.Lock()
-HISTORY_FILE = USER_DIR / "history" / "sessions.json"
 
 
-def _record_session_history(session: Dict[str, Any], model_name: str = "Cloud Vision"):
+def _record_session_history(session: Dict[str, Any], model_name: str):
     try:
-        HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
         history = []
         if HISTORY_FILE.exists():
-            try:
-                history = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
-            except Exception:
-                history = []
-
+            history = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
         history = [h for h in history if h.get("session_id") != session.get("session_id")]
         history.insert(0, {
             "session_id": session["session_id"],
@@ -113,13 +83,14 @@ def get_translation_history():
         return {"history": []}
 
 
-def _get_image_cache_key(img_bytes: bytes, tgt_lang: str) -> str:
+def _get_image_cache_key(img_bytes: bytes, tgt_lang: str, provider: str = "auto", model: str = "", src_lang: str = "Japanese") -> str:
     h = hashlib.sha256(img_bytes).hexdigest()
-    return f"{h}_{tgt_lang.lower().strip()}"
+    scope = "_".join(value.lower().strip() for value in (provider, model, src_lang, tgt_lang))
+    return f"{h}_{hashlib.sha256(scope.encode()).hexdigest()[:16]}"
 
 
-def _load_cached_page_blocks(img_bytes: bytes, tgt_lang: str) -> Optional[Tuple[List[Dict[str, Any]], str]]:
-    key = _get_image_cache_key(img_bytes, tgt_lang)
+def _load_cached_page_blocks(img_bytes: bytes, tgt_lang: str, provider: str = "auto", model: str = "", src_lang: str = "Japanese") -> Optional[Tuple[List[Dict[str, Any]], str]]:
+    key = _get_image_cache_key(img_bytes, tgt_lang, provider, model, src_lang)
     cache_file = CACHE_DIR / f"{key}.json"
     if cache_file.exists():
         try:
@@ -132,9 +103,9 @@ def _load_cached_page_blocks(img_bytes: bytes, tgt_lang: str) -> Optional[Tuple[
     return None
 
 
-def _save_cached_page_blocks(img_bytes: bytes, tgt_lang: str, blocks: List[Dict[str, Any]], model_name: str):
+def _save_cached_page_blocks(img_bytes: bytes, tgt_lang: str, blocks: List[Dict[str, Any]], model_name: str, provider: str = "auto", model: str = "", src_lang: str = "Japanese"):
     try:
-        key = _get_image_cache_key(img_bytes, tgt_lang)
+        key = _get_image_cache_key(img_bytes, tgt_lang, provider, model, src_lang)
         cache_file = CACHE_DIR / f"{key}.json"
         data = {
             "key": key,
@@ -163,112 +134,16 @@ def get_library():
                 mtime_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(stat.st_mtime))
                 items.append({
                     "filename": p.name,
-                    "format": p.suffix.lower().lstrip("."),
                     "size_mb": size_mb,
                     "date": mtime_str,
                     "download_url": f"/api/library/download/{p.name}",
                 })
-    return {"library": items, "count": len(items)}
+    return {"library": items}
 
 
-@app.get("/api/library/download/{filename}")
-def download_from_library(filename: str):
-    """Safely serves a translated archive from data/output with path-traversal prevention."""
-    safe_name = Path(filename).name
-    target_file = (OUTPUT_DIR / safe_name).resolve()
-    if not target_file.is_relative_to(OUTPUT_DIR.resolve()) or not target_file.exists():
-        raise HTTPException(status_code=404, detail="Manga introuvable dans la bibliothèque permanente.")
-    return FileResponse(target_file, filename=safe_name, media_type="application/octet-stream")
-
-
-@app.get("/api/system/check_update")
-async def check_system_update():
-    """
-    Compares the local git commit hash with the remote repository on GitHub (TheShellMaster/manga-traducteur).
-    """
-    import subprocess
-    import httpx
-
-    current_commit = "unknown"
-    try:
-        res = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=str(BASE_DIR),
-        )
-        if res.returncode == 0:
-            current_commit = res.stdout.strip()
-    except Exception:
-        pass
-
-    latest_commit = current_commit
-    up_to_date = True
-    remote_repo = "TheShellMaster/manga-traducteur"
-
-    try:
-        res_git = subprocess.run(
-            ["git", "ls-remote", "--heads", "origin", "main"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=str(BASE_DIR),
-            timeout=3,
-        )
-        if res_git.returncode == 0 and res_git.stdout:
-            remote_full = res_git.stdout.split()[0].strip()
-            latest_commit = remote_full[:7]
-            up_to_date = (current_commit == latest_commit)
-    except Exception:
-        try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                r = await client.get(f"https://api.github.com/repos/{remote_repo}/commits/main")
-                if r.status_code == 200:
-                    latest_commit = r.json().get("sha", "")[:7]
-                    up_to_date = (current_commit == latest_commit)
-        except Exception:
-            pass
-
-    return {
-        "status": "ok",
-        "current_commit": current_commit,
-        "latest_commit": latest_commit,
-        "up_to_date": up_to_date,
-        "version": "2.1.0",
-        "remote_repo": remote_repo,
-    }
-
-
-@app.post("/api/system/shutdown")
-def shutdown_system_server():
-    """
-    Arrête proprement le serveur local Manga Translator Studio.
-    Accessible depuis l'interface Web (PC & Mobile/Android) ou via script.
-    """
-    import os
-    import signal
-    import threading
-    import time
-
-    def _delayed_exit():
-        # En mode test unitaire pytest, ne pas couper le runner
-        if os.environ.get("PYTEST_CURRENT_TEST"):
-            return
-        time.sleep(0.5)
-        try:
-            os.kill(os.getpid(), signal.SIGTERM)
-        except Exception:
-            pass
-
-    threading.Thread(target=_delayed_exit, daemon=True).start()
-    return {
-        "status": "ok",
-        "message": "Le serveur Manga Translator Studio est en cours d'extinction propre."
-    }
-
-
-_last_heartbeat = {"t": 0.0}
+@app.get("/api/history")
+def get_history():
+    return get_translation_history()
 
 
 @app.post("/api/system/heartbeat")
@@ -311,14 +186,22 @@ async def test_provider_model(payload: Dict[str, Any]):
     base_url = str(payload.get("base_url") or "").strip()
     if not model:
         return {"ok": False, "error": "Aucun modèle sélectionné."}
+    preset_url = PROVIDER_PRESETS.get(provider, {}).get("base_url")
+    allowed_url = os.environ.get("CUSTOM_BASE_URL", "") if provider == "custom" else preset_url
+    if provider == "ollama":
+        allowed_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    if base_url and base_url.rstrip("/") != str(allowed_url or "").rstrip("/"):
+        return {"ok": False, "error": "Adresse personnalisée non autorisée pour ce fournisseur."}
+    if not base_url:
+        base_url = allowed_url or ""
     if not api_key and provider != "custom":
         return {"ok": False, "error": "Clé API manquante."}
     t0 = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             if provider == "gemini":
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-                resp = await client.post(url, json={"contents": [{"parts": [{"text": "Reply with: OK"}]}]})
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+                resp = await client.post(url, headers={"x-goog-api-key": api_key}, json={"contents": [{"parts": [{"text": "Reply with: OK"}]}]})
             else:
                 url_base = base_url or PROVIDER_PRESETS.get(provider, {}).get("base_url") or ""
                 if not url_base:
@@ -426,11 +309,19 @@ async def fetch_provider_models_api(payload: Dict[str, Any]):
     if not api_key:
         api_key = (
             os.environ.get(f"{provider.upper()}_API_KEY")
-            or os.environ.get("GEMINI_API_KEY" if provider == "gemini" else "OPENROUTER_API_KEY")
+            or (os.environ.get("OPENROUTER_API_KEY") if provider == "openrouter" else "")
             or ""
         )
 
     base_url = str(payload.get("base_url") or "").strip()
+    preset_url = PROVIDER_PRESETS.get(provider, {}).get("base_url")
+    allowed_url = os.environ.get("CUSTOM_BASE_URL", "") if provider == "custom" else preset_url
+    if provider == "ollama":
+        allowed_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    if base_url and base_url.rstrip("/") != str(allowed_url or "").rstrip("/"):
+        return {"status": "error", "provider": provider, "models": [], "warning": "Adresse personnalisée non autorisée pour ce fournisseur."}
+    if not base_url:
+        base_url = allowed_url or ""
 
     models_list = []
 
@@ -441,8 +332,8 @@ async def fetch_provider_models_api(payload: Dict[str, Any]):
                     # Provide official verified presets if no key yet
                     preset_models = PROVIDER_PRESETS.get("gemini", {}).get("models", [])
                     return {"status": "ok", "provider": provider, "models": preset_models}
-                url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
-                resp = await client.get(url)
+                url = "https://generativelanguage.googleapis.com/v1beta/models"
+                resp = await client.get(url, headers={"x-goog-api-key": api_key})
                 if resp.status_code == 200:
                     d = resp.json()
                     for m in d.get("models", []):
@@ -614,7 +505,7 @@ async def upload_manga(file: UploadFile = File(...)):
     if file.size is not None and file.size == 0:
         raise HTTPException(status_code=400, detail="Le fichier téléversé est vide (0 octet).")
 
-    session_id = str(uuid.uuid4())[:8]
+    session_id = str(uuid.uuid4())
     session_dir = SESSIONS_DIR / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
 
@@ -644,7 +535,7 @@ async def upload_folder(files: List[UploadFile] = File(...)):
     if not files:
         raise HTTPException(status_code=400, detail="Aucun fichier reçu pour le dossier.")
 
-    session_id = str(uuid.uuid4())[:8]
+    session_id = str(uuid.uuid4())
     session_dir = SESSIONS_DIR / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
 
@@ -736,7 +627,7 @@ def _translate_single_page(
         raw_img_bytes = buf.getvalue()
 
     try:
-        cached = _load_cached_page_blocks(raw_img_bytes, tgt_lang)
+        cached = _load_cached_page_blocks(raw_img_bytes, tgt_lang, client.provider, client.model or "", client.src_lang)
         if cached is not None:
             blocks, model_name = cached
             is_cached = True
@@ -752,7 +643,7 @@ def _translate_single_page(
                 target_lang=tgt_lang,
                 context_history=context_history,
             )
-            _save_cached_page_blocks(raw_img_bytes, tgt_lang, blocks, model_name)
+            _save_cached_page_blocks(raw_img_bytes, tgt_lang, blocks, model_name, client.provider, client.model or "", client.src_lang)
 
         # Live view: expose detected bubbles, then the cleaned page, before final typesetting
         page["blocks"] = _serialize_blocks(blocks)
@@ -941,8 +832,13 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
 
     session["status"] = "finished"
     session["progress_percent"] = 100
-    n_err = sum(1 for p in session["pages"][:total] if p.get("status") == "error")
+    failed_pages = [
+        {"index": p.get("index", i), "relative_name": p.get("relative_name", ""), "error": p.get("error", "")}
+        for i, p in enumerate(session["pages"][:total]) if p.get("status") == "error"
+    ]
+    n_err = len(failed_pages)
     session["errors_count"] = n_err
+    session["failed_pages"] = failed_pages
     session["current_log"] = (
         f"Traduction terminée via {last_model}." if n_err == 0
         else f"Traduction terminée : {n_err} page(s) en erreur sur {total}."
@@ -1004,14 +900,13 @@ def start_translation(data: Dict[str, Any], background_tasks: BackgroundTasks):
         session = sessions.get(session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session introuvable")
-        if session.get("status") in {"queued", "translating"}:
-            raise HTTPException(status_code=409, detail="Une traduction est déjà en cours pour cette session.")
-        session["cancelled"] = False
+        if session.get("status") in ("queued", "translating"):
+            raise HTTPException(status_code=409, detail="Traduction déjà en cours.")
         session["status"] = "queued"
-        session["current_log"] = "Traduction en attente."
-        options = dict(data)
-        options["concurrency"] = requested_concurrency
-        background_tasks.add_task(_run_translation_worker_safely, session_id, options)
+        session["cancelled"] = False
+
+    options = {k: v for k, v in data.items() if k != "session_id"}
+    background_tasks.add_task(_run_translation_worker_safely, session_id, options)
     return {"status": "started", "session_id": session_id}
 
 
@@ -1021,8 +916,6 @@ def cancel_translation(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
     session["cancelled"] = True
-    session["status"] = "cancelled"
-    session["current_log"] = "Annulation demandée par l'utilisateur..."
     return {"status": "cancelled", "session_id": session_id}
 
 
@@ -1032,125 +925,51 @@ def retranslate_single_page(session_id: str, page_idx: int, data: Optional[Dict[
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
     if page_idx < 0 or page_idx >= session["total_pages"]:
-        raise HTTPException(status_code=400, detail="Index de page invalide")
-
+        raise HTTPException(status_code=404, detail="Page introuvable")
     opts = data or {}
-    provider = opts.get("provider", os.environ.get("DEFAULT_PROVIDER", "auto"))
+    provider = opts.get("provider", "auto")
     api_key = opts.get("api_key") or None
     base_url = opts.get("base_url") or None
     model = opts.get("model") or None
-    src_lang = opts.get("src_lang", os.environ.get("SRC_LANG", "Japanese"))
-    tgt_lang = opts.get("tgt_lang", os.environ.get("TGT_LANG", "French"))
-    font_style = opts.get("font_style", os.environ.get("FONT_STYLE", "bold"))
-    fixed_font_size = int(opts.get("fixed_font_size", os.environ.get("FIXED_FONT_SIZE", 0) or 0))
-    text_color = opts.get("text_color", os.environ.get("TEXT_COLOR", "#000000"))
-    mask_style = opts.get("mask_style") or opts.get("bubble_shape") or os.environ.get("MASK_STYLE", "smart")
-
-    client = CloudVisionClient(
-        provider=provider,
-        api_key=api_key,
-        base_url=base_url,
-        model=model,
-        src_lang=src_lang,
-        tgt_lang=tgt_lang,
-    )
-
-    res = _translate_single_page(
-        session=session,
-        idx=page_idx,
-        client=client,
-        tgt_lang=tgt_lang,
-        font_style=font_style,
-        fixed_font_size=fixed_font_size,
-        text_color=text_color,
-        mask_style=mask_style,
-    )
+    tgt_lang = opts.get("tgt_lang", "French")
+    render_opts = session.get("last_render_options", {})
+    client = CloudVisionClient(provider=provider, api_key=api_key, base_url=base_url, model=model, src_lang=opts.get("src_lang", "Japanese"), tgt_lang=tgt_lang)
+    res = _translate_single_page(session, page_idx, client, tgt_lang, render_opts.get("font_style", "bold"), render_opts.get("fixed_font_size", 0), render_opts.get("text_color", "#000000"), render_opts.get("mask_style", "smart"))
     return {"session_id": session_id, "page_idx": page_idx, **res}
 
 
 @app.post("/api/rerender/{session_id}/{page_idx}")
 def rerender_page_bubbles(session_id: str, page_idx: int, data: Dict[str, Any]):
-    """
-    Live Bubble Editor endpoint: regenerates the translated page image in < 50 ms
-    from edited blocks (text or coordinates) without calling the Cloud Vision API.
-    """
-    t0 = time.perf_counter()
     session = sessions.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
     if page_idx < 0 or page_idx >= session["total_pages"]:
-        raise HTTPException(status_code=400, detail="Index de page invalide")
-
-    raw_blocks = data.get("blocks")
-    if not isinstance(raw_blocks, list):
-        raise HTTPException(status_code=400, detail="Liste 'blocks' requise")
-
-    last_opts = session.get("last_render_options", {})
-    font_style = data.get("font_style", last_opts.get("font_style", "bold"))
-    fixed_font_size = int(data.get("fixed_font_size", last_opts.get("fixed_font_size", 0)) or 0)
-    text_color = data.get("text_color", last_opts.get("text_color", "#000000"))
-    mask_style = data.get("mask_style") or data.get("bubble_shape") or last_opts.get("mask_style", "smart")
-
-    norm_blocks: List[Dict[str, Any]] = []
-    for b in raw_blocks:
-        if not isinstance(b, dict):
-            continue
-        box = b.get("box")
-        if box and len(box) == 4:
-            x0, y0, x1, y1 = [float(v) for v in box]
-        elif all(k in b for k in ("x", "y", "w", "h")):
-            x0 = float(b["x"])
-            y0 = float(b["y"])
-            x1 = x0 + float(b["w"])
-            y1 = y0 + float(b["h"])
-        else:
-            continue
-        trans = str(b.get("fr") or b.get("translation") or b.get("text") or "").strip()
-        orig = str(b.get("ja") or b.get("original") or "").strip()
-        norm_blocks.append({
-            "box": (x0, y0, x1, y1),
-            "type": str(b.get("type") or "speech"),
-            "original": orig,
-            "translation": trans,
-            "ja": orig,
-            "fr": trans,
+        raise HTTPException(status_code=404, detail="Page introuvable")
+    page = session["pages"][page_idx]
+    if page.get("status") != "done":
+        raise HTTPException(status_code=400, detail="Page non traduite")
+    blocks = []
+    for block in data.get("blocks", []):
+        box = block.get("box", (0, 0, 100, 100))
+        blocks.append({
+            "box": tuple(float(v) for v in box),
+            "type": str(block.get("type") or "speech"),
+            "original": str(block.get("original") or block.get("ja") or ""),
+            "translation": str(block.get("fr") or block.get("translation") or ""),
+            "ja": str(block.get("ja") or block.get("original") or ""),
+            "fr": str(block.get("fr") or block.get("translation") or ""),
         })
-
-    session_dir = Path(session["session_dir"])
-    pages_dir = session_dir / "pages"
-    pages_dir.mkdir(parents=True, exist_ok=True)
-    item = session["image_items"][page_idx]
-
-    img = item.get_image()
-    rendered = render_manga_page(
-        img=img,
-        blocks=norm_blocks,
-        font_style=font_style,
-        fixed_font_size=fixed_font_size,
-        text_color=text_color,
-        mask_style=mask_style,
-    )
-    trans_filename = f"page_{page_idx:03d}_trans.jpg"
-    trans_path = pages_dir / trans_filename
-    rendered.convert("RGB").save(trans_path, format="JPEG", quality=90)
+    img = session["image_items"][page_idx].get_image()
+    opts = session.get("last_render_options", {})
+    rendered = render_manga_page(img, blocks, **opts)
+    pages_dir = Path(session["session_dir"]) / "pages"
+    out = pages_dir / f"page_{page_idx:03d}_trans.jpg"
+    rendered.convert("RGB").save(out, format="JPEG", quality=90)
     rendered.close()
     img.close()
-
-    session["translated_images"][item.relative_name] = trans_path
-    ser_blocks = _serialize_blocks(norm_blocks)
-    session["pages"][page_idx]["status"] = "done"
-    session["pages"][page_idx]["blocks_count"] = len(ser_blocks)
-    session["pages"][page_idx]["blocks"] = ser_blocks
-    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-
-    return {
-        "status": "done",
-        "session_id": session_id,
-        "page_idx": page_idx,
-        "blocks_count": len(ser_blocks),
-        "blocks": ser_blocks,
-        "elapsed_ms": elapsed_ms,
-    }
+    session["pages"][page_idx]["blocks"] = _serialize_blocks(blocks)
+    session["pages"][page_idx]["blocks_count"] = len(blocks)
+    return {"status": "ok", "page_idx": page_idx}
 
 
 @app.get("/api/status/{session_id}")
@@ -1166,6 +985,7 @@ def get_session_status(session_id: str):
         "current_log": session["current_log"],
         "last_bubble": session.get("last_bubble"),
         "errors_count": session.get("errors_count", 0),
+        "failed_pages": session.get("failed_pages", []),
         "pages": session["pages"],
     }
 
@@ -1175,18 +995,12 @@ def get_page_image(session_id: str, version: str, page_idx: int):
     session = sessions.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
-
     pages_dir = Path(session["session_dir"]) / "pages"
     suffix = {"translated": "trans", "clean": "clean"}.get(version, "orig")
-    img_file = pages_dir / f"page_{page_idx:03d}_{suffix}.jpg"
-
-    if not img_file.exists():
-        img_file = pages_dir / f"page_{page_idx:03d}_orig.jpg"
-
-    if not img_file.exists():
-        raise HTTPException(status_code=404, detail="Image non trouvée")
-
-    return FileResponse(img_file, media_type="image/jpeg")
+    image_path = pages_dir / f"page_{page_idx:03d}_{suffix}.jpg"
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Image introuvable")
+    return FileResponse(image_path)
 
 
 @app.get("/api/download/{session_id}")
@@ -1194,43 +1008,24 @@ def download_translated_manga(session_id: str):
     session = sessions.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
+    if session.get("status") != "finished":
+        raise HTTPException(status_code=400, detail="Traduction non terminée")
+    out_path = session.get("permanent_file")
+    if not out_path or not Path(out_path).exists():
+        raise HTTPException(status_code=404, detail="Archive introuvable")
+    return FileResponse(out_path, filename=session.get("permanent_filename", Path(out_path).name), media_type="application/octet-stream")
 
-    perm_file = session.get("permanent_file")
-    if perm_file and Path(perm_file).exists():
-        perm_path = Path(perm_file)
-        return FileResponse(perm_path, filename=perm_path.name, media_type="application/octet-stream")
 
-    session_dir = Path(session["session_dir"])
-    input_file = Path(session["input_file"])
-    fmt = session["fmt"]
+@app.get("/api/library/download/{filename}")
+def download_library_file(filename: str):
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Nom de fichier invalide")
+    path = OUTPUT_DIR / filename
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail="Fichier introuvable")
+    return FileResponse(path, filename=path.name, media_type="application/octet-stream")
 
-    if fmt == "folder":
-        out_name = f"{input_file.name}_fr.cbz"
-        out_path = session_dir / out_name
-        ArchiveHandler.pack(
-            fmt="cbz",
-            input_path=input_file,
-            output_path=out_path,
-            items=session["items"],
-            rendered_images=session["translated_images"],
-        )
-    else:
-        out_name = f"{input_file.stem}_fr{input_file.suffix}"
-        out_path = session_dir / out_name
-        ArchiveHandler.pack(
-            fmt=fmt,
-            input_path=input_file,
-            output_path=out_path,
-            items=session["items"],
-            rendered_images=session["translated_images"],
-        )
 
-    # Also preserve in permanent OUTPUT_DIR
-    try:
-        perm_dest = OUTPUT_DIR / f"{Path(out_name).stem}_{session_id}{Path(out_name).suffix}"
-        if not perm_dest.exists():
-            shutil.copy2(out_path, perm_dest)
-    except Exception:
-        pass
-
-    return FileResponse(out_path, filename=out_name, media_type="application/octet-stream")
+@app.get("/api/pipeline")
+def pipeline_status():
+    return {"status": "ok"}
