@@ -73,6 +73,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # In-memory session tracking
 sessions: Dict[str, Dict[str, Any]] = {}
+_session_state_lock = threading.Lock()
 HISTORY_FILE = USER_DIR / "history" / "sessions.json"
 
 
@@ -813,8 +814,11 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
     if not session:
         return
 
+    if session.get("cancelled"):
+        session["status"] = "cancelled"
+        session["current_log"] = "Traduction annulée avant son démarrage."
+        return
     session["status"] = "translating"
-    session["cancelled"] = False
 
     provider = options.get("provider", "auto")
     api_key = options.get("api_key") or None
@@ -850,7 +854,6 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
 
     # Inter-page context memory: last 8 translated lines across previous pages
     context_history: List[Dict[str, str]] = []
-    context_lock = threading.Lock()
     last_model = "Cloud Vision"
     completed_count = 0
 
@@ -879,8 +882,7 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
                 "model": "Resumed (cache disque)",
             }
 
-        with context_lock:
-            ctx_snapshot = list(context_history[-8:])
+        ctx_snapshot = list(context_history[-8:])
         res = _translate_single_page(
             session=session,
             idx=page_idx,
@@ -894,50 +896,48 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
         )
         return page_idx, res
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
-        futures = {executor.submit(_worker_task, p_idx): p_idx for p_idx in range(total)}
-        for future in concurrent.futures.as_completed(futures):
-            if session.get("cancelled"):
-                session["status"] = "cancelled"
-                session["current_log"] = "Traduction annulée."
-                executor.shutdown(wait=False, cancel_futures=True)
-                return
+    # Translate and commit pages in archive order. Eagerly submitting multiple
+    # pages lets a worker read stale context before the prior page is committed,
+    # even with max_workers=1. Serial dispatch keeps context and progress ordered.
+    for p_idx in range(total):
+        if session.get("cancelled"):
+            session["status"] = "cancelled"
+            session["current_log"] = "Traduction annulée."
+            return
+        try:
+            result = _worker_task(p_idx)
+            if not result:
+                continue
+            _, res = result
+            completed_count += 1
+            session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
 
-            try:
-                result = future.result()
-                if not result:
-                    continue
-                p_idx, res = result
-                completed_count += 1
-                session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
+            if res.get("status") == "done":
+                last_model = res.get("model", "Cloud Vision")
+                last_blocks = res.get("blocks", [])
+                for b in last_blocks:
+                    if b.get("original") or b.get("translation"):
+                        context_history.append({
+                            "original": b.get("original", ""),
+                            "translation": b.get("translation", ""),
+                        })
+                if len(context_history) > 12:
+                    context_history = context_history[-12:]
 
-                if res.get("status") == "done":
-                    last_model = res.get("model", "Cloud Vision")
-                    last_blocks = res.get("blocks", [])
-                    with context_lock:
-                        for b in last_blocks:
-                            if b.get("original") or b.get("translation"):
-                                context_history.append({
-                                    "original": b.get("original", ""),
-                                    "translation": b.get("translation", ""),
-                                })
-                        if len(context_history) > 12:
-                            context_history = context_history[-12:]
-
-                    if last_blocks:
-                        sample_b = last_blocks[0]
-                        orig_snippet = sample_b.get("original", "")[:35]
-                        trans_snippet = sample_b.get("translation", "")[:40]
-                        session["last_bubble"] = {
-                            "page": p_idx + 1,
-                            "original": orig_snippet,
-                            "translation": trans_snippet,
-                            "model": last_model,
-                        }
-                        session["current_log"] = f"[{last_model}] Page {p_idx + 1}/{total} : « {orig_snippet} » -> « {trans_snippet} » ({completed_count}/{total} terminées)"
-            except Exception as e:
-                completed_count += 1
-                session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
+                if last_blocks:
+                    sample_b = last_blocks[0]
+                    orig_snippet = sample_b.get("original", "")[:35]
+                    trans_snippet = sample_b.get("translation", "")[:40]
+                    session["last_bubble"] = {
+                        "page": p_idx + 1,
+                        "original": orig_snippet,
+                        "translation": trans_snippet,
+                        "model": last_model,
+                    }
+                    session["current_log"] = f"[{last_model}] Page {p_idx + 1}/{total} : « {orig_snippet} » -> « {trans_snippet} » ({completed_count}/{total} terminées)"
+        except Exception:
+            completed_count += 1
+            session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
 
     session["status"] = "finished"
     session["progress_percent"] = 100
@@ -971,14 +971,47 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
     _record_session_history(session, model_name=last_model)
 
 
+def _run_translation_worker_safely(session_id: str, options: Dict[str, Any]):
+    """Keep failed background runs observable without leaking provider exception details."""
+    try:
+        _run_translation_worker(session_id, options)
+    except Exception:
+        session = sessions.get(session_id)
+        if session:
+            session["status"] = "error"
+            session["current_log"] = "La traduction a échoué avant son terme. Vérifiez les paramètres et les journaux locaux."
+
+
 @app.post("/api/translate/start")
 def start_translation(data: Dict[str, Any], background_tasks: BackgroundTasks):
     session_id = data.get("session_id")
-    if not session_id or session_id not in sessions:
+    if not session_id:
         raise HTTPException(status_code=404, detail="Session introuvable")
 
-    sessions[session_id]["cancelled"] = False
-    background_tasks.add_task(_run_translation_worker, session_id, data)
+    requested_concurrency = data.get("concurrency", 1)
+    if isinstance(requested_concurrency, bool):
+        raise HTTPException(status_code=400, detail="La concurrence doit être un entier de 1 à 3.")
+    try:
+        requested_concurrency = int(requested_concurrency)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="La concurrence doit être un entier de 1 à 3.")
+    if requested_concurrency < 1 or requested_concurrency > 3:
+        raise HTTPException(status_code=400, detail="La concurrence doit être un entier de 1 à 3.")
+
+    # Reserve the session before queuing work so duplicate HTTP requests cannot
+    # start two workers against the same page files and provider quota.
+    with _session_state_lock:
+        session = sessions.get(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session introuvable")
+        if session.get("status") in {"queued", "translating"}:
+            raise HTTPException(status_code=409, detail="Une traduction est déjà en cours pour cette session.")
+        session["cancelled"] = False
+        session["status"] = "queued"
+        session["current_log"] = "Traduction en attente."
+        options = dict(data)
+        options["concurrency"] = requested_concurrency
+        background_tasks.add_task(_run_translation_worker_safely, session_id, options)
     return {"status": "started", "session_id": session_id}
 
 

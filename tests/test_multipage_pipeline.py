@@ -304,3 +304,36 @@ def test_memory_and_pil_cleanup_on_large_chapter(tmp_path):
     assert session["status"] == "finished"
     assert session["total_pages"] == 10
     assert len(session["translated_images"]) == 10
+
+
+def test_page_context_is_committed_before_next_page(tmp_path):
+    """Ordered page processing must pass prior dialogue into the next OCR call."""
+    cbz_file = _create_synthetic_cbz(tmp_path / "ordered_context.cbz", num_pages=4)
+    with cbz_file.open("rb") as archive:
+        response = client.post(
+            "/api/upload",
+            files={"file": (cbz_file.name, archive, "application/octet-stream")},
+        )
+    assert response.status_code == 200
+    session_id = response.json()["session_id"]
+    context_sizes = []
+
+    def mock_detect(img, max_side=1600, context_history=None):
+        context_sizes.append(len(context_history or []))
+        n = len(context_sizes)
+        return [{
+            "box": (100.0, 100.0, 300.0, 200.0),
+            "type": "speech",
+            "original": f"Dialogue {n}",
+            "translation": f"Réplique {n}",
+            "fr": f"Réplique {n}",
+            "ja": f"Dialogue {n}",
+        }], "mock-vision"
+
+    with patch("server._load_cached_page_blocks", return_value=None), \
+         patch("server._save_cached_page_blocks"), \
+         patch.object(CloudVisionClient, "detect_and_translate", side_effect=mock_detect):
+        _run_translation_worker(session_id, {"provider": "auto", "tgt_lang": "French", "concurrency": 3})
+
+    assert context_sizes == [0, 1, 2, 3]
+    assert sessions[session_id]["status"] == "finished"
