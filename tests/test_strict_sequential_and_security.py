@@ -49,9 +49,49 @@ def test_anonymous_settings_route_masks_secrets():
 
 def test_anonymous_settings_route_rejects_unknown_payloads():
     """POST /api/settings must validate keys and reject unallowed arbitrary fields."""
-    res = client.post("/api/settings", json={"attacker_key": "injected", "extra_payload": 123})
+    res = client.post(
+        "/api/settings",
+        json={"attacker_key": "injected", "extra_payload": 123},
+        headers={"Origin": "http://testserver"},
+    )
     assert res.status_code == 400
     assert "autorisé" in res.json().get("detail", "")
+
+
+def test_csrf_rejects_missing_origin():
+    """POST without Origin header must be rejected with 403."""
+    response = client.post("/api/settings", json={"key": "val"})
+    assert response.status_code == 403
+
+
+def test_csrf_rejects_null_origin():
+    """POST with Origin: null must be rejected with 403."""
+    response = client.post(
+        "/api/settings",
+        json={"key": "val"},
+        headers={"Origin": "null"},
+    )
+    assert response.status_code == 403
+
+
+def test_fetch_models_rejects_private_ip():
+    """SSRF Prevention: Base URLs pointing to private/loopback/cloud metadata or non-http must be rejected."""
+    for url in [
+        "http://169.254.169.254/v1",
+        "http://127.0.0.1:11434/v1",
+        "http://192.168.1.1/v1",
+        "file:///etc/passwd",
+    ]:
+        response = client.get("/api/models/fetch", params={"base_url": url})
+        assert response.status_code in [400, 403], f"SSRF not blocked for {url}: got {response.status_code}"
+
+
+def test_concurrency_hard_capped_to_one():
+    """Concurrency parameter must be unconditionally forced to 1 for strict sequential translation."""
+    from server import _translation_concurrency
+    for req in [0, 1, 2, 3, 99]:
+        assert _translation_concurrency({"concurrency": req}, 100) == 1
+    assert _translation_concurrency({}, 50) == 1
 
 
 def test_sensitive_routes_reject_cross_origin_requests():
@@ -95,7 +135,7 @@ def test_sensitive_routes_path_traversal_protection():
 
 def test_shutdown_endpoint_safe_in_test_mode():
     """POST /api/system/shutdown accepts local requests and safely aborts actual kill under test."""
-    res = client.post("/api/system/shutdown")
+    res = client.post("/api/system/shutdown", headers={"Origin": "http://testserver"})
     assert res.status_code == 200
     assert res.json().get("status") == "ok"
 
@@ -291,3 +331,72 @@ def test_strict_sequential_page_ordering_and_context_propagation(tmp_path):
     assert contexts_received[2][1]["translation"] == "Traduction page 1"
     # Page 3 has context from Pages 0, 1, and 2
     assert len(contexts_received[3]) == 3
+
+
+def test_public_vitrine_renders_clean_showcase_without_secrets():
+    """GET / must render the 3D showcase without exposing API keys, models, or internal routes."""
+    res = client.get("/")
+    assert res.status_code == 200
+    assert "Manga Translator" in res.text
+    assert "Studio" in res.text
+    # No sensitive strings
+    assert "AIzaSy" not in res.text
+    assert "sk-or-v1" not in res.text
+    assert "gsk_" not in res.text
+
+
+def test_studio_protection_and_unlock():
+    """GET /studio requires authentication; unauthenticated visits show unlock page; unlock grants cookie."""
+    # 1. Unauthenticated visit
+    res_anon = client.get("/studio")
+    assert res_anon.status_code in [200, 401]
+    assert "Accès Studio" in res_anon.text or "Déverrouiller" in res_anon.text
+
+    # 2. Invalid passcode rejected
+    res_bad = client.post(
+        "/api/studio/unlock",
+        json={"key": "wrong_password"},
+        headers={"Origin": "http://testserver"},
+    )
+    assert res_bad.status_code == 401
+
+    # 3. Valid passcode accepted and sets cookie
+    res_ok = client.post(
+        "/api/studio/unlock",
+        json={"key": "manga2026"},
+        headers={"Origin": "http://testserver"},
+    )
+    assert res_ok.status_code == 200
+    cookie_val = res_ok.cookies.get("mts_studio_auth")
+    assert cookie_val == "manga2026"
+
+    # 4. Access studio with valid cookie
+    res_auth = client.get("/studio", cookies={"mts_studio_auth": "manga2026"})
+    assert res_auth.status_code == 200
+    assert "Manga Translator" in res_auth.text
+
+
+def test_manga_reader_view_and_rtl_spread_metadata(tmp_path):
+    """GET /reader/{session_id} and GET /api/reader/{session_id} return reader UI and metadata."""
+    sess = _build_test_session(tmp_path, "session_test_reader", page_count=3)
+
+    # 1. Reader HTML view
+    res_html = client.get("/reader/session_test_reader")
+    assert res_html.status_code == 200
+    assert "Lecteur Manga Immersif" in res_html.text
+    assert "data-direction=\"rtl\"" in res_html.text
+    assert "Double" in res_html.text
+
+    # 2. Reader JSON API
+    res_api = client.get("/api/reader/session_test_reader")
+    assert res_api.status_code == 200
+    meta = res_api.json()
+    assert meta["session_id"] == "session_test_reader"
+    assert meta["total_pages"] == 3
+    assert len(meta["pages"]) == 3
+    assert meta["pages"][0]["original_url"] == "/api/image/session_test_reader/orig/0"
+    assert meta["pages"][0]["translated_url"] == "/api/image/session_test_reader/translated/0"
+
+    # 3. Nonexistent session returns 404
+    assert client.get("/reader/nonexistent_xyz").status_code == 404
+    assert client.get("/api/reader/nonexistent_xyz").status_code == 404

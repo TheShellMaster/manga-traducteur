@@ -18,8 +18,26 @@ def test_settings_never_returns_saved_secrets(monkeypatch):
 
 
 def test_settings_rejects_unknown_fields():
-    response = client.post("/api/settings", json={"unexpected": "value"})
+    response = client.post(
+        "/api/settings",
+        json={"unexpected": "value"},
+        headers={"Origin": "http://testserver"},
+    )
     assert response.status_code == 400
+
+
+def test_csrf_rejects_missing_origin():
+    response = client.post("/api/settings", json={"key": "val"})
+    assert response.status_code == 403
+
+
+def test_csrf_rejects_null_origin():
+    response = client.post(
+        "/api/settings",
+        json={"key": "val"},
+        headers={"Origin": "null"},
+    )
+    assert response.status_code == 403
 
 
 def test_cross_origin_post_is_rejected():
@@ -27,8 +45,7 @@ def test_cross_origin_post_is_rejected():
     assert response.status_code == 403
 
 
-def test_page_translation_defaults_to_sequential_and_clamps_opt_in():
-    assert _translation_concurrency({}, 12) == 1
-    assert _translation_concurrency({"concurrency": 2}, 12) == 2
-    assert _translation_concurrency({"concurrency": 99}, 2) == 2
-    assert _translation_concurrency({"concurrency": "invalid"}, 12) == 1
+def test_concurrency_hard_capped_to_one():
+    for req in [0, 1, 2, 3, 99]:
+        assert _translation_concurrency({"concurrency": req}, 100) == 1
+    assert _translation_concurrency({}, 50) == 1
