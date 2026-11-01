@@ -33,7 +33,18 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Manga Translator Web Studio", version="2.1.0", lifespan=lifespan)
+docs_url = "/docs" if os.environ.get("MTS_DEV_DOCS") == "1" else None
+redoc_url = "/redoc" if os.environ.get("MTS_DEV_DOCS") == "1" else None
+openapi_url = "/openapi.json" if os.environ.get("MTS_DEV_DOCS") == "1" else None
+
+app = FastAPI(
+    title="Manga Translator Web Studio",
+    version="2.1.0",
+    lifespan=lifespan,
+    docs_url=docs_url,
+    redoc_url=redoc_url,
+    openapi_url=openapi_url,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -75,6 +86,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 # In-memory session tracking
 sessions: Dict[str, Dict[str, Any]] = {}
 _session_state_lock = threading.Lock()
+_global_vision_lock = threading.Lock()
 HISTORY_FILE = USER_DIR / "history" / "sessions.json"
 
 
@@ -801,7 +813,8 @@ def _translate_single_page(
                 img.save(buf, format="JPEG", quality=90)
                 raw_img_bytes = buf.getvalue()
 
-        if force_refresh:
+        force_refresh_effective = force_refresh or bool(options and options.get("force_refresh"))
+        if force_refresh_effective:
             _invalidate_cached_page_blocks(raw_img_bytes, tgt_lang)
             cached = None
         else:
@@ -812,11 +825,12 @@ def _translate_single_page(
             is_cached = True
         else:
             is_cached = False
-            blocks, model_name = client.detect_and_translate(
-                img,
-                max_side=1600,
-                context_history=context_history,
-            )
+            with _global_vision_lock:
+                blocks, model_name = client.detect_and_translate(
+                    img,
+                    max_side=1600,
+                    context_history=context_history,
+                )
             opts = options or {}
             # Refiner is strictly opt-in (Rule 9: single model by default)
             use_refiner = opts.get("use_refiner")
