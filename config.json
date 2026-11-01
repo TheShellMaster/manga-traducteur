@@ -1,6 +1,22 @@
 {
   "translator": {
-    "translator": "none",
-    "target_lang": "FR"
+    "provider": "auto",
+    "model": null,
+    "api_key": null
+  },
+  "refiner": {
+    "enabled": false,
+    "provider": "none",
+    "model": null,
+    "api_key": null
+  },
+  "options": {
+    "src_lang": "Japanese",
+    "tgt_lang": "French",
+    "register": "standard",
+    "font_style": "bold",
+    "fixed_font_size": 0,
+    "text_color": "#000000",
+    "mask_style": "smart"
   }
 }
