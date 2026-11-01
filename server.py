@@ -735,28 +735,48 @@ def _translate_single_page(
     pages_dir = session_dir / "pages"
     pages_dir.mkdir(parents=True, exist_ok=True)
     item = session["image_items"][idx]
-    total = session["total_pages"]
-
+    total = session.get("total_pages", len(session.get("pages", [])))
     page = session["pages"][idx]
+
     page["status"] = "processing"
     page["stage"] = "detect"
     page["blocks"] = []
-    img = item.get_image()
 
-    raw_img_bytes = None
-    if item.raw_bytes:
-        raw_img_bytes = item.raw_bytes
-    elif item.source_path and item.source_path.exists():
-        try:
-            raw_img_bytes = item.source_path.read_bytes()
-        except Exception:
-            raw_img_bytes = None
-    if not raw_img_bytes:
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=90)
-        raw_img_bytes = buf.getvalue()
+    orig_path = pages_dir / f"page_{idx:03d}_orig.jpg"
+    trans_path = pages_dir / f"page_{idx:03d}_trans.jpg"
+    clean_path = pages_dir / f"page_{idx:03d}_clean.jpg"
 
+    img = None
     try:
+        try:
+            img = item.get_image()
+        except Exception:
+            if orig_path.exists():
+                img = Image.open(orig_path)
+                img.load()
+            else:
+                raise
+
+        # Ensure orig_path is always saved on disk
+        if not orig_path.exists():
+            img.convert("RGB").save(orig_path, format="JPEG", quality=85)
+
+        raw_img_bytes = None
+        if item.raw_bytes:
+            raw_img_bytes = item.raw_bytes
+        elif item.source_path and item.source_path.exists():
+            try:
+                raw_img_bytes = item.source_path.read_bytes()
+            except Exception:
+                raw_img_bytes = None
+        if not raw_img_bytes:
+            if orig_path.exists():
+                raw_img_bytes = orig_path.read_bytes()
+            else:
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG", quality=90)
+                raw_img_bytes = buf.getvalue()
+
         if force_refresh:
             _invalidate_cached_page_blocks(raw_img_bytes, tgt_lang)
             cached = None
@@ -799,7 +819,7 @@ def _translate_single_page(
         page["blocks_count"] = len(page["blocks"])
         page["stage"] = "clean"
         cleaned = render_manga_page(img=img.copy(), blocks=blocks, mask_style=mask_style, mask_only=True)
-        cleaned.convert("RGB").save(pages_dir / f"page_{idx:03d}_clean.jpg", format="JPEG", quality=85)
+        cleaned.convert("RGB").save(clean_path, format="JPEG", quality=85)
         cleaned.close()
         page["stage"] = "write"
 
@@ -811,11 +831,12 @@ def _translate_single_page(
             text_color=text_color,
             mask_style=mask_style,
         )
-        trans_filename = f"page_{idx:03d}_trans.jpg"
-        trans_path = pages_dir / trans_filename
         rendered.convert("RGB").save(trans_path, format="JPEG", quality=90)
         rendered.close()
-        img.close()
+        try:
+            img.close()
+        except Exception:
+            pass
         session["translated_images"][item.relative_name] = trans_path
 
         ser_blocks = _serialize_blocks(blocks)
@@ -827,11 +848,22 @@ def _translate_single_page(
         gc.collect()
         return {"status": "done", "blocks_count": len(ser_blocks), "blocks": ser_blocks, "model": model_name}
     except Exception as e:
-        fallback_filename = f"page_{idx:03d}_trans.jpg"
-        fallback_path = pages_dir / fallback_filename
-        img.convert("RGB").save(fallback_path, format="JPEG", quality=90)
-        img.close()
-        session["translated_images"][item.relative_name] = fallback_path
+        try:
+            if orig_path.exists():
+                shutil.copy2(orig_path, trans_path)
+            elif img is not None:
+                try:
+                    img.convert("RGB").save(trans_path, format="JPEG", quality=90)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        try:
+            if img is not None:
+                img.close()
+        except Exception:
+            pass
+        session["translated_images"][item.relative_name] = trans_path
         session["pages"][idx]["status"] = "error"
         session["pages"][idx]["stage"] = "error"
         session["pages"][idx]["error"] = str(e)[:300]
@@ -891,9 +923,8 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
     last_model = "Cloud Vision"
     completed_count = 0
 
-    # Multi-page parallel translation (concurrency = 2 or 3 workers)
-    concurrency = min(3, max(1, total))
-    concurrency = int(options.get("concurrency") or concurrency)
+    # Sequential by default (concurrency = 1) for natural reading order "au fur et à mesure"
+    concurrency = int(options.get("concurrency") or 1)
 
     session_dir = Path(session["session_dir"])
     pages_dir = session_dir / "pages"
@@ -960,44 +991,91 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
                 context_history[:] = full_ordered[-12:]
 
             return page_idx, res
+        except Exception as exc:
+            item = session["image_items"][page_idx]
+            fallback_path = pages_dir / f"page_{page_idx:03d}_trans.jpg"
+            orig_file = pages_dir / f"page_{page_idx:03d}_orig.jpg"
+            if orig_file.exists() and not fallback_path.exists():
+                try:
+                    shutil.copy2(orig_file, fallback_path)
+                except Exception:
+                    pass
+            session["translated_images"][item.relative_name] = fallback_path
+            session["pages"][page_idx]["status"] = "error"
+            session["pages"][page_idx]["stage"] = "error"
+            session["pages"][page_idx]["error"] = str(exc)[:300]
+            return page_idx, {"status": "error", "error": str(exc)}
         finally:
             page_events[page_idx].set()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
-        futures = {executor.submit(_worker_task, p_idx): p_idx for p_idx in range(total)}
-        for future in concurrent.futures.as_completed(futures):
+    if concurrency <= 1:
+        # Strict sequential translation ("au fur et à mesure")
+        for p_idx in range(total):
             if session.get("cancelled"):
                 session["status"] = "cancelled"
                 session["current_log"] = "Traduction annulée."
-                executor.shutdown(wait=False, cancel_futures=True)
                 return
 
-            try:
-                result = future.result()
-                if not result:
-                    continue
-                p_idx, res = result
-                completed_count += 1
-                session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
+            session["current_page"] = p_idx
+            res = _worker_task(p_idx)
+            if not res:
+                continue
+            _, page_res = res
+            completed_count += 1
+            session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
 
-                if res.get("status") == "done":
-                    last_model = res.get("model", "Cloud Vision")
-                    last_blocks = res.get("blocks", [])
+            if page_res.get("status") == "done":
+                last_model = page_res.get("model", "Cloud Vision")
+                last_blocks = page_res.get("blocks", [])
+                if last_blocks:
+                    sample_b = last_blocks[0]
+                    orig_snippet = sample_b.get("original", "")[:35]
+                    trans_snippet = sample_b.get("translation", "")[:40]
+                    session["last_bubble"] = {
+                        "page": p_idx + 1,
+                        "original": orig_snippet,
+                        "translation": trans_snippet,
+                        "model": last_model,
+                    }
+                    session["current_log"] = f"[{last_model}] Page {p_idx + 1}/{total} : « {orig_snippet} » -> « {trans_snippet} » ({completed_count}/{total} terminées)"
+            else:
+                session["current_log"] = f"Page {p_idx + 1}/{total} : Erreur ({page_res.get('error', 'Échec')}), page originale conservée"
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
+            futures = {executor.submit(_worker_task, p_idx): p_idx for p_idx in range(total)}
+            for future in concurrent.futures.as_completed(futures):
+                if session.get("cancelled"):
+                    session["status"] = "cancelled"
+                    session["current_log"] = "Traduction annulée."
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    return
 
-                    if last_blocks:
-                        sample_b = last_blocks[0]
-                        orig_snippet = sample_b.get("original", "")[:35]
-                        trans_snippet = sample_b.get("translation", "")[:40]
-                        session["last_bubble"] = {
-                            "page": p_idx + 1,
-                            "original": orig_snippet,
-                            "translation": trans_snippet,
-                            "model": last_model,
-                        }
-                        session["current_log"] = f"[{last_model}] Page {p_idx + 1}/{total} : « {orig_snippet} » -> « {trans_snippet} » ({completed_count}/{total} terminées)"
-            except Exception as e:
-                completed_count += 1
-                session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
+                try:
+                    result = future.result()
+                    if not result:
+                        continue
+                    p_idx, res = result
+                    completed_count += 1
+                    session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
+
+                    if res.get("status") == "done":
+                        last_model = res.get("model", "Cloud Vision")
+                        last_blocks = res.get("blocks", [])
+
+                        if last_blocks:
+                            sample_b = last_blocks[0]
+                            orig_snippet = sample_b.get("original", "")[:35]
+                            trans_snippet = sample_b.get("translation", "")[:40]
+                            session["last_bubble"] = {
+                                "page": p_idx + 1,
+                                "original": orig_snippet,
+                                "translation": trans_snippet,
+                                "model": last_model,
+                            }
+                            session["current_log"] = f"[{last_model}] Page {p_idx + 1}/{total} : « {orig_snippet} » -> « {trans_snippet} » ({completed_count}/{total} terminées)"
+                except Exception as e:
+                    completed_count += 1
+                    session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
 
     session["status"] = "finished"
     session["progress_percent"] = 100
@@ -1239,9 +1317,28 @@ def get_page_image(session_id: str, version: str, page_idx: int):
         img_file = pages_dir / f"page_{page_idx:03d}_orig.jpg"
 
     if not img_file.exists():
+        # Auto-recover original page from item if not present on disk
+        if 0 <= page_idx < len(session.get("image_items", [])):
+            try:
+                pages_dir.mkdir(parents=True, exist_ok=True)
+                orig_file = pages_dir / f"page_{page_idx:03d}_orig.jpg"
+                item = session["image_items"][page_idx]
+                img = item.get_image()
+                img.convert("RGB").save(orig_file, format="JPEG", quality=85)
+                img.close()
+                if orig_file.exists():
+                    img_file = orig_file
+            except Exception as rec_err:
+                print(f"[Image Recovery] Impossible de régénérer la page {page_idx}: {rec_err}")
+
+    if not img_file.exists():
         raise HTTPException(status_code=404, detail="Image non trouvée")
 
-    return FileResponse(img_file, media_type="image/jpeg")
+    return FileResponse(
+        img_file,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
 
 
 @app.get("/api/download/{session_id}")

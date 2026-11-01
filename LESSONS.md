@@ -151,3 +151,16 @@ Ce fichier consigne les erreurs rencontrées, leur cause racine et la règle pr�
 - **Correctif & Règle** :
   1. Supprimer immédiatement tous les éléments décoratifs orphelins ou factices du DOM (`floating-bg`, `extract-anim-overlay`).
   2. Règle stricte : Aucun élément HTML décoratif ou d'animation ne doit exister dans le template sans être lié à un composant CSS testé et validé visuellement via Playwright.
+
+---
+
+## 19. Traduction Séquentielle Page par Page (« Au fur et à mesure ») & Robustesse du Worker
+- **Symptôme** : L'utilisateur lance la traduction d'un manga et constate que l'application « essaie de tout traduire à la fois », que les miniatures n'ont pas le temps de charger et que les pages se retrouvent bloquées en « Analyse » ou finissent prématurément avec une archive vide.
+- **Causes racines** :
+  1. Le worker backend utilisait un `ThreadPoolExecutor` avec `concurrency = 3` par défaut, soumettant toutes les pages de l'archive simultanément dans le pool de threads.
+  2. Dans `_translate_single_page`, le bloc `except Exception` appelait `img.convert("RGB")` sur un objet `img` potentiellement déjà fermé par `img.close()`, levant une seconde exception `ValueError: Operation on closed image` non rattrapée qui laissait la page figée en statut `"processing"`.
+  3. L'endpoint `/api/image` renvoyait une erreur 404 si le fichier disque temporaire n'avait pas encore été écrit au lieu de le régénérer à la volée depuis `image_items`.
+- **Correctif & Règle** :
+  1. La traduction de manga doit obligatoirement être **séquentielle par défaut** (`concurrency = 1`), page par page dans l'ordre chronologique de lecture : la page en cours passe en `Analyse ⚡`, les suivantes restent sagement `En attente`, et le contexte narratif des dialogues se transmet fidèlement de page en page.
+  2. Sécuriser `_translate_single_page` avec un `try/except` global étanche, fermer les descripteurs d'image dans un bloc `finally` sécurisé et utiliser `shutil.copy2` depuis `page_xxx_orig.jpg` pour la copie de secours en cas d'erreur.
+  3. Auto-régénération transparente à la demande des planches dans `/api/image` avec en-têtes `Cache-Control`.

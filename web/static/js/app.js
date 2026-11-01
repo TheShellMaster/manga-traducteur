@@ -787,13 +787,14 @@
     state.animated = new Set(); state.anim = null; state.detectShown = null;
     state.revealQueue = []; state.isRevealing = false;
     state.pages.forEach((p) => { if (p.status !== "done") p.status = "pending"; });
+    renderThumbs();
     $("#btn-translate").classList.add("hidden");
     $("#btn-cancel").classList.remove("hidden");
     $("#btn-download").classList.add("hidden");
     $("#progress").classList.remove("hidden", "done");
     $("#live-badge").classList.remove("hidden");
     $("#progress-fill").style.width = "0%";
-    $("#progress-label").textContent = "Démarrage";
+    $("#progress-label").textContent = "Démarrage...";
     renderBubbles();
     state.poll = setInterval(pollStatus, 700);
     pollStatus();
@@ -815,7 +816,7 @@
     $("#progress-fill").style.width = `${d.progress_percent}%`;
     $("#progress-count").textContent = `${done} / ${d.total_pages}`;
     const proc = d.pages.findIndex((p) => p.status === "processing");
-    $("#progress-label").textContent = proc >= 0 ? `Traduction de la page ${proc + 1}` : "Traduction";
+    $("#progress-label").textContent = proc >= 0 ? `Traduction de la page ${proc + 1} / ${d.total_pages}` : (done === d.total_pages ? "Traduction terminée" : "Traduction en cours");
     d.pages.forEach((p, i) => { if (!prev[i] || prev[i].status !== p.status) updateThumb(i); });
 
     // Collect newly finished pages into reveal queue (no pages skipped!)
