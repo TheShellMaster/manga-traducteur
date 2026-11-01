@@ -29,3 +29,11 @@ data/*
 
 # Teamwork scratch directories
 .agents/teamwork/
+
+# Local Agent Communication & Codebase Exports (NEVER COMMIT)
+*_POUR_CLAUDE.md
+REPONSE_*.md
+BUNDLE_*.md
+VERIFICATION_*.md
+README_CODEBASE.md
+CODEBASE_EXPORT.md

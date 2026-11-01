@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{ title }} — Lecteur Manga Immersif</title>
+  <style>
+    :root {
+      --bg-reader: #090d16;
+      --bg-panel: rgba(15, 23, 42, 0.85);
+      --border-color: rgba(255, 255, 255, 0.12);
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    body {
+      background-color: var(--bg-reader);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* TOP BAR */
+    .reader-header {
+      height: 56px;
+      background: var(--bg-panel);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.25rem;
+      z-index: 50;
+      transition: transform 0.3s ease;
+    }
+    .reader-header.autohide {
+      transform: translateY(-100%);
+    }
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .back-btn {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: color 0.2s;
+    }
+    .back-btn:hover {
+      color: #fff;
+    }
+    .manga-title {
+      font-weight: 700;
+      font-size: 1rem;
+      color: #fff;
+      max-width: 280px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* CONTROLS CENTER */
+    .controls-center {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-group {
+      display: flex;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 8px;
+      padding: 2px;
+      border: 1px solid var(--border-color);
+    }
+    .ctrl-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      transition: all 0.2s;
+    }
+    .ctrl-btn:hover {
+      color: #fff;
+    }
+    .ctrl-btn.active {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+    }
+
+    /* RIGHT ACTIONS */
+    .actions-right {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .page-indicator {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .page-indicator strong {
+      color: #fff;
+    }
+
+    /* VIEWPORT */
+    .reader-viewport {
+      flex: 1;
+      position: relative;
+      overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--bg-reader);
+    }
+
+    /* STYLES FOR SINGLE PAGE */
+    .view-single {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      width: 100%;
+    }
+    .view-single img {
+      max-height: 98vh;
+      max-width: 95vw;
+      object-fit: contain;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+      border-radius: 4px;
+    }
+
+    /* STYLES FOR DOUBLE SPREAD */
+    .view-spread {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      width: 100%;
+      gap: 2px;
+    }
+    .view-spread img {
+      max-height: 98vh;
+      max-width: 49vw;
+      object-fit: contain;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+    }
+    /* In Japanese RTL: Left is page N+1, Right is page N */
+    .view-spread[data-dir="rtl"] {
+      flex-direction: row;
+    }
+    .view-spread[data-dir="ltr"] {
+      flex-direction: row-reverse;
+    }
+
+    /* STYLES FOR WEBTOON */
+    .view-webtoon {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      padding: 1rem 0;
+    }
+    .view-webtoon img {
+      width: 100%;
+      max-width: 800px;
+      display: block;
+      margin: 0 auto;
+      object-fit: contain;
+    }
+
+    /* CURTAIN SLIDER COMPARATOR */
+    .curtain-container {
+      position: relative;
+      display: inline-block;
+      max-height: 98vh;
+      max-width: 95vw;
+      overflow: hidden;
+      border-radius: 4px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+    }
+    .curtain-container img {
+      display: block;
+      max-height: 98vh;
+      max-width: 95vw;
+      object-fit: contain;
+      pointer-events: none;
+    }
+    .curtain-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .curtain-overlay img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      max-height: 98vh;
+      max-width: 95vw;
+    }
+    .curtain-divider {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: #6366f1;
+      cursor: ew-resize;
+      z-index: 10;
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.8);
+    }
+    .curtain-handle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #6366f1;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    }
+
+    /* NAVIGATION CLICK ZONES */
+    .nav-zone {
+      position: absolute;
+      top: 56px;
+      bottom: 60px;
+      width: 25%;
+      cursor: pointer;
+      z-index: 20;
+    }
+    .nav-zone.left {
+      left: 0;
+    }
+    .nav-zone.right {
+      right: 0;
+    }
+
+    /* BOTTOM FILMSTRIP */
+    .filmstrip-drawer {
+      height: 70px;
+      background: var(--bg-panel);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      padding: 0 1rem;
+      gap: 0.5rem;
+      overflow-x: auto;
+      z-index: 50;
+      transition: transform 0.3s ease;
+    }
+    .filmstrip-drawer.autohide {
+      transform: translateY(100%);
+    }
+    .thumb-item {
+      height: 52px;
+      width: 38px;
+      border-radius: 3px;
+      border: 2px solid transparent;
+      overflow: hidden;
+      cursor: pointer;
+      flex-shrink: 0;
+      opacity: 0.6;
+      transition: all 0.2s;
+    }
+    .thumb-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .thumb-item:hover {
+      opacity: 0.9;
+    }
+    .thumb-item.active {
+      border-color: var(--accent);
+      opacity: 1;
+      transform: scale(1.05);
+    }
+
+    /* SHORTCUTS MODAL */
+    .shortcuts-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .shortcuts-card {
+      background: #1e293b;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 2rem;
+      max-width: 480px;
+      width: 90%;
+    }
+    .shortcuts-card h2 {
+      margin-bottom: 1rem;
+      font-size: 1.25rem;
+    }
+    .shortcuts-list {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.75rem 1rem;
+      font-size: 0.9rem;
+    }
+    kbd {
+      background: #0f172a;
+      border: 1px solid var(--border-color);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body data-mode="single" data-direction="rtl" data-version="translated">
+
+  <!-- TOP HEADER -->
+  <header class="reader-header" id="reader-header">
+    <div class="brand-group">
+      <a href="/studio" class="back-btn" title="Retour au studio">← Studio</a>
+      <div class="manga-title" id="manga-title">{{ title }}</div>
+    </div>
+
+    <div class="controls-center">
+      <!-- Mode de lecture -->
+      <div class="btn-group" aria-label="Mode de mise en page">
+        <button class="ctrl-btn active" id="btn-mode-single" onclick="setMode('single')" title="Page Simple">📄 Simple</button>
+        <button class="ctrl-btn" id="btn-mode-spread" onclick="setMode('spread')" title="Planche Double (Spread)">📖 Double</button>
+        <button class="ctrl-btn" id="btn-mode-webtoon" onclick="setMode('webtoon')" title="Défilement Continu Webtoon">📜 Webtoon</button>
+      </div>
+
+      <!-- Sens de lecture RTL / LTR -->
+      <div class="btn-group" aria-label="Sens de lecture">
+        <button class="ctrl-btn active" id="btn-dir-rtl" onclick="setDirection('rtl')" title="Sens Japonais : Flèche Gauche = Page Suivante">⬅️ RTL</button>
+        <button class="ctrl-btn" id="btn-dir-ltr" onclick="setDirection('ltr')" title="Sens Occidental : Flèche Droite = Page Suivante">➡️ LTR</button>
+      </div>
+
+      <!-- Comparateur A/B -->
+      <div class="btn-group" aria-label="Version affichée">
+        <button class="ctrl-btn active" id="btn-ver-trans" onclick="setVersion('translated')" title="Version Traduite (Touche Espace pour basculer)">Traduit</button>
+        <button class="ctrl-btn" id="btn-ver-orig" onclick="setVersion('orig')" title="Version Originale">Original</button>
+        <button class="ctrl-btn" id="btn-ver-curtain" onclick="toggleCurtain()" title="Rideau Comparatif A/B">✂️ Rideau</button>
+      </div>
+    </div>
+
+    <div class="actions-right">
+      <div class="page-indicator">
+        Page <strong id="cur-page-num">1</strong> / <span id="total-pages-num">{{ total_pages }}</span>
+      </div>
+      <button class="ctrl-btn" onclick="toggleHelp()" title="Raccourcis Clavier (?)">⌨️</button>
+      <button class="ctrl-btn" onclick="toggleFullscreen()" title="Plein Écran (F)">⛶</button>
+    </div>
+  </header>
+
+  <!-- VIEWPORT PRINCIPAL -->
+  <main class="reader-viewport" id="viewport">
+    <div id="canvas-container"></div>
+    <div class="nav-zone left" id="nav-left" onclick="handleZoneClick('left')"></div>
+    <div class="nav-zone right" id="nav-right" onclick="handleZoneClick('right')"></div>
+  </main>
+
+  <!-- FILMSTRIP MINIATURES -->
+  <footer class="filmstrip-drawer" id="filmstrip"></footer>
+
+  <!-- MODAL RACCOURCIS -->
+  <div class="shortcuts-overlay" id="shortcuts-modal" onclick="toggleHelp()">
+    <div class="shortcuts-card" onclick="event.stopPropagation()">
+      <h2>⌨️ Raccourcis Clavier du Lecteur</h2>
+      <div class="shortcuts-list">
+        <kbd>←</kbd> <span><strong>Mode RTL (Japonais)</strong> : Page Suivante<br><strong>Mode LTR</strong> : Page Précédente</span>
+        <kbd>→</kbd> <span><strong>Mode RTL (Japonais)</strong> : Page Précédente<br><strong>Mode LTR</strong> : Page Suivante</span>
+        <kbd>Espace</kbd> <span>Basculer instantanément Traduit ↔ Original</span>
+        <kbd>M</kbd> <span>Changer de mode (Simple ➔ Double Planche ➔ Webtoon)</span>
+        <kbd>D</kbd> <span>Inverser le sens de lecture (RTL ↔ LTR)</span>
+        <kbd>C</kbd> <span>Activer/Désactiver le rideau Avant/Après</span>
+        <kbd>F</kbd> <span>Basculer Plein Écran</span>
+        <kbd>?</kbd> <span>Ouvrir cette aide</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SESSION_ID = "{{ session_id }}";
+    const TOTAL_PAGES = parseInt("{{ total_pages }}", 10) || 1;
+    let currentPage = 0;
+    let mode = 'single'; // 'single', 'spread', 'webtoon'
+    let direction = 'rtl'; // 'rtl' (Japanese standard) or 'ltr'
+    let version = 'translated'; // 'translated', 'orig'
+    let isCurtain = false;
+    let curtainPercent = 50;
+
+    // Initialize Reader
+    async function initReader() {
+      buildFilmstrip();
+      renderCurrentView();
+      document.addEventListener('keydown', handleKeyNavigation);
+    }
+
+    function buildFilmstrip() {
+      const fs = document.getElementById('filmstrip');
+      fs.innerHTML = '';
+      for (let i = 0; i < TOTAL_PAGES; i++) {
+        const item = document.createElement('div');
+        item.className = `thumb-item ${i === currentPage ? 'active' : ''}`;
+        item.id = `thumb-${i}`;
+        item.onclick = () => goToPage(i);
+        const img = document.createElement('img');
+        img.src = `/api/image/${SESSION_ID}/orig/${i}`;
+        img.loading = 'lazy';
+        item.appendChild(img);
+        fs.appendChild(item);
+      }
+    }
+
+    function updateFilmstripHighlight() {
+      document.querySelectorAll('.thumb-item').forEach((el, idx) => {
+        if (mode === 'spread') {
+          const inSpread = (idx === currentPage || idx === currentPage + 1);
+          el.classList.toggle('active', inSpread);
+        } else {
+          el.classList.toggle('active', idx === currentPage);
+        }
+      });
+      const activeThumb = document.getElementById(`thumb-${currentPage}`);
+      if (activeThumb) {
+        activeThumb.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
+    }
+
+    function setMode(newMode) {
+      mode = newMode;
+      document.body.setAttribute('data-mode', mode);
+      document.querySelectorAll('#btn-mode-single, #btn-mode-spread, #btn-mode-webtoon').forEach(b => b.classList.remove('active'));
+      document.getElementById(`btn-mode-${mode}`).classList.add('active');
+      renderCurrentView();
+    }
+
+    function setDirection(newDir) {
+      direction = newDir;
+      document.body.setAttribute('data-direction', direction);
+      document.querySelectorAll('#btn-dir-rtl, #btn-dir-ltr').forEach(b => b.classList.remove('active'));
+      document.getElementById(`btn-dir-${direction}`).classList.add('active');
+      renderCurrentView();
+    }
+
+    function setVersion(newVer) {
+      version = newVer;
+      isCurtain = false;
+      document.querySelectorAll('#btn-ver-trans, #btn-ver-orig, #btn-ver-curtain').forEach(b => b.classList.remove('active'));
+      document.getElementById(version === 'translated' ? 'btn-ver-trans' : 'btn-ver-orig').classList.add('active');
+      renderCurrentView();
+    }
+
+    function toggleCurtain() {
+      isCurtain = !isCurtain;
+      document.querySelectorAll('#btn-ver-trans, #btn-ver-orig, #btn-ver-curtain').forEach(b => b.classList.remove('active'));
+      if (isCurtain) {
+        document.getElementById('btn-ver-curtain').classList.add('active');
+      } else {
+        document.getElementById(version === 'translated' ? 'btn-ver-trans' : 'btn-ver-orig').classList.add('active');
+      }
+      renderCurrentView();
+    }
+
+    function goToPage(idx) {
+      if (idx < 0) idx = 0;
+      if (idx >= TOTAL_PAGES) idx = TOTAL_PAGES - 1;
+      currentPage = idx;
+      document.getElementById('cur-page-num').textContent = currentPage + 1;
+      updateFilmstripHighlight();
+      renderCurrentView();
+    }
+
+    function nextPage() {
+      const step = (mode === 'spread') ? 2 : 1;
+      if (currentPage + step < TOTAL_PAGES) {
+        goToPage(currentPage + step);
+      } else if (currentPage + 1 < TOTAL_PAGES) {
+        goToPage(currentPage + 1);
+      }
+    }
+
+    function prevPage() {
+      const step = (mode === 'spread') ? 2 : 1;
+      if (currentPage - step >= 0) {
+        goToPage(currentPage - step);
+      } else {
+        goToPage(0);
+      }
+    }
+
+    // JAPANESE RTL RULES:
+    // Left arrow = Page suivante (avance dans l'histoire)
+    // Right arrow = Page précédente (recule dans l'histoire)
+    function handleKeyNavigation(e) {
+      if (e.target.tagName === 'INPUT') return;
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (direction === 'rtl') {
+          nextPage(); // RTL: Gauche = Suivant
+        } else {
+          prevPage(); // LTR: Gauche = Précédent
+        }
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (direction === 'rtl') {
+          prevPage(); // RTL: Droite = Précédent
+        } else {
+          nextPage(); // LTR: Droite = Suivant
+        }
+      } else if (e.code === 'Space') {
+        e.preventDefault();
+        setVersion(version === 'translated' ? 'orig' : 'translated');
+      } else if (e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        const modes = ['single', 'spread', 'webtoon'];
+        const nextIdx = (modes.indexOf(mode) + 1) % modes.length;
+        setMode(modes[nextIdx]);
+      } else if (e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        setDirection(direction === 'rtl' ? 'ltr' : 'rtl');
+      } else if (e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        toggleCurtain();
+      } else if (e.key === '?') {
+        e.preventDefault();
+        toggleHelp();
+      }
+    }
+
+    function handleZoneClick(side) {
+      if (side === 'left') {
+        direction === 'rtl' ? nextPage() : prevPage();
+      } else {
+        direction === 'rtl' ? prevPage() : nextPage();
+      }
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+
+    function toggleHelp() {
+      const modal = document.getElementById('shortcuts-modal');
+      modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+    }
+
+    function renderCurrentView() {
+      const container = document.getElementById('canvas-container');
+      container.innerHTML = '';
+
+      if (mode === 'webtoon') {
+        const wrap = document.createElement('div');
+        wrap.className = 'view-webtoon';
+        for (let i = 0; i < TOTAL_PAGES; i++) {
+          const img = document.createElement('img');
+          img.src = `/api/image/${SESSION_ID}/${version}/${i}`;
+          img.loading = i < 3 ? 'eager' : 'lazy';
+          wrap.appendChild(img);
+        }
+        container.appendChild(wrap);
+        return;
+      }
+
+      if (isCurtain) {
+        const wrap = document.createElement('div');
+        wrap.className = 'curtain-container';
+
+        const imgOrig = document.createElement('img');
+        imgOrig.src = `/api/image/${SESSION_ID}/orig/${currentPage}`;
+        wrap.appendChild(imgOrig);
+
+        const overlay = document.createElement('div');
+        overlay.className = 'curtain-overlay';
+        overlay.style.clipPath = `inset(0 ${100 - curtainPercent}% 0 0)`;
+
+        const imgTrans = document.createElement('img');
+        imgTrans.src = `/api/image/${SESSION_ID}/translated/${currentPage}`;
+        overlay.appendChild(imgTrans);
+        wrap.appendChild(overlay);
+
+        const divider = document.createElement('div');
+        divider.className = 'curtain-divider';
+        divider.style.left = `${curtainPercent}%`;
+        divider.innerHTML = '<div class="curtain-handle">⬌</div>';
+
+        let dragging = false;
+        function updateSlider(e) {
+          const rect = wrap.getBoundingClientRect();
+          let x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+          let p = Math.max(0, Math.min(100, (x / rect.width) * 100));
+          curtainPercent = p;
+          divider.style.left = `${p}%`;
+          overlay.style.clipPath = `inset(0 ${100 - p}% 0 0)`;
+        }
+        divider.addEventListener('mousedown', () => dragging = true);
+        window.addEventListener('mouseup', () => dragging = false);
+        window.addEventListener('mousemove', (e) => { if (dragging) updateSlider(e); });
+        wrap.appendChild(divider);
+
+        container.appendChild(wrap);
+        return;
+      }
+
+      if (mode === 'spread') {
+        const wrap = document.createElement('div');
+        wrap.className = 'view-spread';
+        wrap.setAttribute('data-dir', direction);
+
+        const pageLeftIdx = (direction === 'rtl') ? currentPage + 1 : currentPage;
+        const pageRightIdx = (direction === 'rtl') ? currentPage : currentPage + 1;
+
+        if (pageLeftIdx < TOTAL_PAGES) {
+          const imgLeft = document.createElement('img');
+          imgLeft.src = `/api/image/${SESSION_ID}/${version}/${pageLeftIdx}`;
+          wrap.appendChild(imgLeft);
+        }
+        if (pageRightIdx < TOTAL_PAGES) {
+          const imgRight = document.createElement('img');
+          imgRight.src = `/api/image/${SESSION_ID}/${version}/${pageRightIdx}`;
+          wrap.appendChild(imgRight);
+        }
+        container.appendChild(wrap);
+        return;
+      }
+
+      // Default: Single page
+      const wrap = document.createElement('div');
+      wrap.className = 'view-single';
+      const img = document.createElement('img');
+      img.src = `/api/image/${SESSION_ID}/${version}/${currentPage}`;
+      wrap.appendChild(img);
+      container.appendChild(wrap);
+    }
+
+    // Auto-hide controls when idle
+    let idleTimer = null;
+    document.addEventListener('mousemove', () => {
+      document.getElementById('reader-header').classList.remove('autohide');
+      document.getElementById('filmstrip').classList.remove('autohide');
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        document.getElementById('reader-header').classList.add('autohide');
+        document.getElementById('filmstrip').classList.add('autohide');
+      }, 4000);
+    });
+
+    initReader();
+  </script>
+</body>
+</html>

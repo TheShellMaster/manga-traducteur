@@ -14,7 +14,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Any, Optional, List
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Request
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,7 +33,18 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Manga Translator Web Studio", version="2.1.0", lifespan=lifespan)
+docs_url = "/docs" if os.environ.get("MTS_DEV_DOCS") == "1" else None
+redoc_url = "/redoc" if os.environ.get("MTS_DEV_DOCS") == "1" else None
+openapi_url = "/openapi.json" if os.environ.get("MTS_DEV_DOCS") == "1" else None
+
+app = FastAPI(
+    title="Manga Translator Web Studio",
+    version="2.1.0",
+    lifespan=lifespan,
+    docs_url=docs_url,
+    redoc_url=redoc_url,
+    openapi_url=openapi_url,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,10 +66,54 @@ for d in (STATIC_DIR, TEMPLATES_DIR, DATA_DIR, SESSIONS_DIR, OUTPUT_DIR, CACHE_D
     d.mkdir(parents=True, exist_ok=True)
 
 
+def _is_safe_url(url_str: str) -> bool:
+    """
+    SSRF Protection:
+    Ensures URL uses http/https and does NOT resolve to loopback, private,
+    link-local, multicast, or reserved IP addresses.
+    """
+    if not url_str or not isinstance(url_str, str):
+        return False
+    try:
+        from urllib.parse import urlsplit
+        import ipaddress
+        import socket
+        parsed = urlsplit(url_str.strip())
+        if parsed.scheme.lower() not in {"http", "https"}:
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        # Direct IP check
+        try:
+            ip_obj = ipaddress.ip_address(hostname)
+            if (ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_reserved 
+                    or ip_obj.is_link_local or ip_obj.is_multicast):
+                return False
+        except ValueError:
+            # Domain name DNS resolution check
+            try:
+                addr_info = socket.getaddrinfo(hostname, None)
+                for entry in addr_info:
+                    ip_str = entry[4][0]
+                    ip_obj = ipaddress.ip_address(ip_str)
+                    if (ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_reserved 
+                            or ip_obj.is_link_local or ip_obj.is_multicast):
+                        return False
+            except Exception:
+                return False
+        return True
+    except Exception:
+        return False
+
+
 @app.middleware("http")
 async def reject_cross_origin_writes(request, call_next):
-    origin = request.headers.get("origin")
-    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and origin:
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        origin = request.headers.get("origin")
+        if not origin or origin == "null":
+            return JSONResponse({"detail": "Origin required"}, status_code=403)
         from urllib.parse import urlsplit
         parsed = urlsplit(origin)
         request_port = request.url.port or (443 if request.url.scheme == "https" else 80)
@@ -75,6 +130,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 # In-memory session tracking
 sessions: Dict[str, Dict[str, Any]] = {}
 _session_state_lock = threading.Lock()
+_global_vision_lock = threading.Lock()
 HISTORY_FILE = USER_DIR / "history" / "sessions.json"
 
 
@@ -321,6 +377,8 @@ async def test_provider_model(payload: Dict[str, Any]):
     load_env()
     api_key = str(payload.get("api_key") or "").strip() or os.environ.get(f"{provider.upper()}_API_KEY", "")
     base_url = str(payload.get("base_url") or "").strip()
+    if base_url and not _is_safe_url(base_url):
+        raise HTTPException(status_code=400, detail="URL non sécurisée ou IP privée/réservée interdite.")
     if not model:
         return {"ok": False, "error": "Aucun modèle sélectionné."}
     if not api_key and provider != "custom":
@@ -367,6 +425,106 @@ def get_session_data(session_id: str):
         "total_pages": session["total_pages"],
         "pages": session["pages"],
         "status": session["status"],
+    }
+
+
+MTS_STUDIO_KEY = os.environ.get("MTS_STUDIO_KEY", "manga2026")
+
+
+def _is_studio_authenticated(request: Request) -> bool:
+    if request.cookies.get("mts_studio_auth") == MTS_STUDIO_KEY:
+        return True
+    if request.query_params.get("key") == MTS_STUDIO_KEY or request.query_params.get("code") == MTS_STUDIO_KEY:
+        return True
+    auth_hdr = request.headers.get("authorization", "")
+    if auth_hdr.startswith("Bearer ") and auth_hdr[7:].strip() == MTS_STUDIO_KEY:
+        return True
+    if request.headers.get("x-studio-key") == MTS_STUDIO_KEY:
+        return True
+    return False
+
+
+@app.get("/studio", response_class=HTMLResponse)
+def studio_view(request: Request):
+    """
+    Interface de travail Manga Translator Studio protégée.
+    Nécessite le code d'accès administrateur (MTS_STUDIO_KEY).
+    """
+    if _is_studio_authenticated(request):
+        html_file = TEMPLATES_DIR / "studio.html"
+        if not html_file.exists():
+            html_file = TEMPLATES_DIR / "index.html"
+        resp = HTMLResponse(html_file.read_text(encoding="utf-8"))
+        if request.query_params.get("key") == MTS_STUDIO_KEY:
+            resp.set_cookie("mts_studio_auth", MTS_STUDIO_KEY, httponly=True, samesite="lax", max_age=86400)
+        return resp
+
+    unlock_file = TEMPLATES_DIR / "studio_unlock.html"
+    if unlock_file.exists():
+        return HTMLResponse(unlock_file.read_text(encoding="utf-8"), status_code=200)
+    return HTMLResponse("<h1>Accès Studio Restreint</h1><p>Code administrateur requis.</p>", status_code=401)
+
+
+@app.post("/api/studio/unlock")
+async def studio_unlock_api(request: Request):
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    key = str(data.get("key") or data.get("passcode") or "").strip()
+    if key == MTS_STUDIO_KEY:
+        resp = JSONResponse({"status": "ok", "message": "Accès Studio autorisé."})
+        resp.set_cookie("mts_studio_auth", MTS_STUDIO_KEY, httponly=True, samesite="lax", max_age=86400)
+        return resp
+    return JSONResponse({"detail": "Code d'accès incorrect."}, status_code=401)
+
+
+@app.post("/api/studio/lock")
+def studio_lock_api():
+    resp = JSONResponse({"status": "ok", "message": "Studio verrouillé."})
+    resp.delete_cookie("mts_studio_auth")
+    return resp
+
+
+@app.get("/reader/{session_id}", response_class=HTMLResponse)
+def manga_reader_view(session_id: str):
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session manga introuvable pour la liseuse.")
+    reader_file = TEMPLATES_DIR / "reader.html"
+    if not reader_file.exists():
+        raise HTTPException(status_code=404, detail="Gabarit du lecteur introuvable.")
+    total = session.get("total_pages", len(session.get("pages", [])))
+    title = Path(session.get("input_file", "Manga")).stem
+    html = reader_file.read_text(encoding="utf-8")
+    html = html.replace("{{ session_id }}", session_id)
+    html = html.replace("{{ total_pages }}", str(total))
+    html = html.replace("{{ title }}", title)
+    return HTMLResponse(html)
+
+
+@app.get("/api/reader/{session_id}")
+def get_reader_metadata_api(session_id: str):
+    session = sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session manga introuvable.")
+    total = session.get("total_pages", len(session.get("pages", [])))
+    title = Path(session.get("input_file", "Manga")).stem
+    pages_meta = []
+    for i in range(total):
+        pages_meta.append({
+            "index": i,
+            "page_num": i + 1,
+            "original_url": f"/api/image/{session_id}/orig/{i}",
+            "translated_url": f"/api/image/{session_id}/translated/{i}",
+            "clean_url": f"/api/image/{session_id}/clean/{i}",
+        })
+    return {
+        "session_id": session_id,
+        "title": title,
+        "total_pages": total,
+        "pages": pages_meta,
+        "format": session.get("fmt", "cbz"),
     }
 
 
@@ -429,8 +587,8 @@ async def save_settings(data: Dict[str, Any]):
     return {"status": "ok", "message": "Paramètres sauvegardés avec succès"}
 
 
-@app.post("/api/models/fetch")
-async def fetch_provider_models_api(payload: Dict[str, Any]):
+@app.api_route("/api/models/fetch", methods=["GET", "POST"])
+async def fetch_provider_models_api(request: Request):
     """
     Live real model discovery from official API endpoints.
     Receives { provider, api_key, base_url } and returns live model list directly from the provider.
@@ -438,17 +596,29 @@ async def fetch_provider_models_api(payload: Dict[str, Any]):
     """
     import httpx
 
-    provider = str(payload.get("provider") or "gemini").lower()
+    if request.method == "POST":
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+        provider = str(payload.get("provider") or "gemini").lower()
+        api_key = str(payload.get("api_key") or "").strip()
+        base_url = str(payload.get("base_url") or "").strip()
+    else:
+        provider = str(request.query_params.get("provider") or "gemini").lower()
+        api_key = str(request.query_params.get("api_key") or "").strip()
+        base_url = str(request.query_params.get("base_url") or "").strip()
+
+    if base_url and not _is_safe_url(base_url):
+        raise HTTPException(status_code=400, detail="URL non sécurisée ou IP privée/réservée interdite.")
+
     load_env()
-    api_key = str(payload.get("api_key") or "").strip()
     if not api_key:
         api_key = (
             os.environ.get(f"{provider.upper()}_API_KEY")
             or os.environ.get("GEMINI_API_KEY" if provider == "gemini" else "OPENROUTER_API_KEY")
             or ""
         )
-
-    base_url = str(payload.get("base_url") or "").strip()
 
     models_list = []
 
@@ -801,7 +971,8 @@ def _translate_single_page(
                 img.save(buf, format="JPEG", quality=90)
                 raw_img_bytes = buf.getvalue()
 
-        if force_refresh:
+        force_refresh_effective = force_refresh or bool(options and options.get("force_refresh"))
+        if force_refresh_effective:
             _invalidate_cached_page_blocks(raw_img_bytes, tgt_lang)
             cached = None
         else:
@@ -812,11 +983,12 @@ def _translate_single_page(
             is_cached = True
         else:
             is_cached = False
-            blocks, model_name = client.detect_and_translate(
-                img,
-                max_side=1600,
-                context_history=context_history,
-            )
+            with _global_vision_lock:
+                blocks, model_name = client.detect_and_translate(
+                    img,
+                    max_side=1600,
+                    context_history=context_history,
+                )
             opts = options or {}
             # Refiner is strictly opt-in (Rule 9: single model by default)
             use_refiner = opts.get("use_refiner")
@@ -947,8 +1119,8 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
     last_model = "Cloud Vision"
     completed_count = 0
 
-    # Sequential by default (concurrency = 1) for natural reading order "au fur et à mesure"
-    concurrency = int(options.get("concurrency") or 1)
+    # Sequential strictly (concurrency = 1) for natural reading order "au fur et à mesure"
+    concurrency = _translation_concurrency(options, total)
 
     session_dir = Path(session["session_dir"])
     pages_dir = session_dir / "pages"
@@ -1032,74 +1204,37 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
         finally:
             page_events[page_idx].set()
 
-    if concurrency <= 1:
-        # Strict sequential translation ("au fur et à mesure")
-        for p_idx in range(total):
-            if session.get("cancelled"):
-                session["status"] = "cancelled"
-                session["current_log"] = "Traduction annulée."
-                return
+    # Strict sequential translation ("au fur et à mesure")
+    for p_idx in range(total):
+        if session.get("cancelled"):
+            session["status"] = "cancelled"
+            session["current_log"] = "Traduction annulée."
+            return
 
-            session["current_page"] = p_idx
-            res = _worker_task(p_idx)
-            if not res:
-                continue
-            _, page_res = res
-            completed_count += 1
-            session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
+        session["current_page"] = p_idx
+        res = _worker_task(p_idx)
+        if not res:
+            continue
+        _, page_res = res
+        completed_count += 1
+        session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
 
-            if page_res.get("status") == "done":
-                last_model = page_res.get("model", "Cloud Vision")
-                last_blocks = page_res.get("blocks", [])
-                if last_blocks:
-                    sample_b = last_blocks[0]
-                    orig_snippet = sample_b.get("original", "")[:35]
-                    trans_snippet = sample_b.get("translation", "")[:40]
-                    session["last_bubble"] = {
-                        "page": p_idx + 1,
-                        "original": orig_snippet,
-                        "translation": trans_snippet,
-                        "model": last_model,
-                    }
-                    session["current_log"] = f"[{last_model}] Page {p_idx + 1}/{total} : « {orig_snippet} » -> « {trans_snippet} » ({completed_count}/{total} terminées)"
-            else:
-                session["current_log"] = f"Page {p_idx + 1}/{total} : Erreur ({page_res.get('error', 'Échec')}), page originale conservée"
-    else:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
-            futures = {executor.submit(_worker_task, p_idx): p_idx for p_idx in range(total)}
-            for future in concurrent.futures.as_completed(futures):
-                if session.get("cancelled"):
-                    session["status"] = "cancelled"
-                    session["current_log"] = "Traduction annulée."
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    return
-
-                try:
-                    result = future.result()
-                    if not result:
-                        continue
-                    p_idx, res = result
-                    completed_count += 1
-                    session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
-
-                    if res.get("status") == "done":
-                        last_model = res.get("model", "Cloud Vision")
-                        last_blocks = res.get("blocks", [])
-
-                        if last_blocks:
-                            sample_b = last_blocks[0]
-                            orig_snippet = sample_b.get("original", "")[:35]
-                            trans_snippet = sample_b.get("translation", "")[:40]
-                            session["last_bubble"] = {
-                                "page": p_idx + 1,
-                                "original": orig_snippet,
-                                "translation": trans_snippet,
-                                "model": last_model,
-                            }
-                            session["current_log"] = f"[{last_model}] Page {p_idx + 1}/{total} : « {orig_snippet} » -> « {trans_snippet} » ({completed_count}/{total} terminées)"
-                except Exception as e:
-                    completed_count += 1
-                    session["progress_percent"] = round((completed_count / total) * 100) if total > 0 else 100
+        if page_res.get("status") == "done":
+            last_model = page_res.get("model", "Cloud Vision")
+            last_blocks = page_res.get("blocks", [])
+            if last_blocks:
+                sample_b = last_blocks[0]
+                orig_snippet = sample_b.get("original", "")[:35]
+                trans_snippet = sample_b.get("translation", "")[:40]
+                session["last_bubble"] = {
+                    "page": p_idx + 1,
+                    "original": orig_snippet,
+                    "translation": trans_snippet,
+                    "model": last_model,
+                }
+                session["current_log"] = f"[{last_model}] Page {p_idx + 1}/{total} : « {orig_snippet} » -> « {trans_snippet} » ({completed_count}/{total} terminées)"
+        else:
+            session["current_log"] = f"Page {p_idx + 1}/{total} : Erreur ({page_res.get('error', 'Échec')}), page originale conservée"
 
     session["status"] = "finished"
     session["progress_percent"] = 100
@@ -1134,12 +1269,9 @@ def _run_translation_worker(session_id: str, options: Dict[str, Any]):
 
 
 def _translation_concurrency(opts: Dict[str, Any], total_pages: int) -> int:
-    """Clamps concurrency strictly. Default 1 page at a time; clamp to [1, 3] and total pages."""
-    try:
-        requested = int(opts.get("concurrency") or 1)
-    except (TypeError, ValueError):
-        requested = 1
-    return min(3, max(1, requested), max(1, total_pages))
+    # FORCÉ À 1 — le modèle Vision ne traduit qu'une page à la fois
+    # Céder aux demandes de parallélisme = perte de contexte narratif
+    return 1
 
 
 def _run_translation_worker_safely(session_id: str, options: Dict[str, Any]):

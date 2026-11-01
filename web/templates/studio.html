@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f8fafc">
+  <title>Manga Translator Studio</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" href="/static/icons/icon-192.png">
+  <link rel="stylesheet" href="/static/css/style.css?v=4">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 7h13m0 0-4-4m4 4-4 4M17 17H4m0 0 4-4m-4 4 4 4"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  </svg>
+
+  <div class="app" id="app">
+    <header class="topbar">
+      <a class="brand" href="#translate" data-nav="translate">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span></span>
+        <span class="brand-name">Manga Translator <em>Studio</em></span>
+      </a>
+      <nav class="tabs" id="nav-tabs">
+        <button class="tab active" data-nav="translate">Traduire</button>
+        <button class="tab" data-nav="library">Bibliothèque</button>
+        <button class="tab" data-nav="guide">Guide</button>
+        <span class="tab-indicator" id="tab-indicator"></span>
+      </nav>
+      <div class="top-api-status" id="top-api-status" aria-label="Services d'IA connectés"></div>
+      <div class="top-actions">
+        <button class="icon-btn" id="btn-theme" title="Basculer thème clair/sombre" aria-label="Thème"><span id="theme-icon">🌙</span></button>
+        <button class="icon-btn" id="btn-settings" title="Paramètres" aria-label="Paramètres"><svg><use href="#i-gear"/></svg></button>
+        <button class="icon-btn danger" id="btn-quit" title="Quitter l'application" aria-label="Quitter"><svg><use href="#i-power"/></svg></button>
+      </div>
+    </header>
+
+    <main class="views">
+      <!-- ============ TRADUIRE ============ -->
+      <section class="view active" id="view-translate">
+        <!-- Étape 1 : déposer -->
+        <div class="empty" id="empty-state">
+          <div class="drop" id="drop-zone" tabindex="0">
+            <div class="drop-glow" aria-hidden="true"></div>
+            <div class="drop-icon"><svg><use href="#i-upload"/></svg></div>
+            <h1>Déposez un chapitre ici</h1>
+            <p>Archive CBZ, CBR, ZIP, RAR, une image ou un dossier d'images</p>
+            <div class="drop-actions">
+              <button class="btn primary" id="btn-pick-file"><svg><use href="#i-file"/></svg>Choisir un fichier</button>
+              <button class="btn ghost" id="btn-pick-folder"><svg><use href="#i-folder"/></svg>Choisir un dossier</button>
+            </div>
+            <input type="file" id="file-input" accept=".cbz,.cbr,.zip,.rar,.jpg,.jpeg,.png,.webp" hidden>
+            <input type="file" id="folder-input" webkitdirectory directory multiple hidden>
+          </div>
+          <div class="engine-hint" id="engine-hint"></div>
+          <div class="home-api-pills" id="home-api-pills" aria-label="Services d'IA disponibles"></div>
+          <ol class="steps-row">
+            <li><b>1</b><span>Déposez votre chapitre</span></li>
+            <li><b>2</b><span>Choisissez la langue</span></li>
+            <li><b>3</b><span>Regardez la traduction se faire</span></li>
+          </ol>
+        </div>
+
+        <!-- Étape 2 : studio -->
+        <div class="studio hidden" id="studio">
+          <div class="toolbar">
+            <div class="file-chip"><svg><use href="#i-file"/></svg><span id="file-name">-</span><small id="file-pages"></small></div>
+            <div class="lang-pick">
+              <select id="src-lang" aria-label="Langue d'origine"></select>
+              <button class="icon-btn sm" id="btn-swap-lang" title="Inverser" aria-label="Inverser les langues"><svg><use href="#i-swap"/></svg></button>
+              <select id="tgt-lang" aria-label="Langue de traduction"></select>
+            </div>
+            <div class="model-pick">
+              <span class="model-pick-icon" title="Modèle d'IA actif">⚡</span>
+              <select id="studio-provider-select" aria-label="Fournisseur et modèle de vision IA"></select>
+            </div>
+            <div class="register-pick">
+              <span class="register-pick-icon" title="Registre et style">💬</span>
+              <select id="studio-register-select" aria-label="Registre de langue" title="Registre de traduction">
+                <option value="standard">Standard (Naturel)</option>
+                <option value="familier">Familier (Shonen)</option>
+                <option value="soutenu">Soutenu (Noble)</option>
+              </select>
+            </div>
+            <div class="toolbar-actions">
+              <button class="btn ghost sm" id="btn-new">Nouveau</button>
+              <button class="btn primary" id="btn-translate">Traduire</button>
+              <button class="btn ghost hidden" id="btn-cancel">Arrêter</button>
+              <a class="btn success hidden" id="btn-download"><svg><use href="#i-down"/></svg>Télécharger</a>
+            </div>
+          </div>
+
+          <div class="progress hidden" id="progress">
+            <div class="progress-bar"><span id="progress-fill"></span></div>
+            <div class="progress-text"><span id="progress-label">Préparation</span><span id="progress-count"></span></div>
+          </div>
+
+          <div class="workspace">
+            <aside class="pages" id="page-list" aria-label="Pages"></aside>
+
+            <div class="stage-wrap">
+              <div class="stage-head">
+                <div class="seg" id="view-mode">
+                  <button class="active" data-mode="translated">Traduit</button>
+                  <button data-mode="split">Côte à côte</button>
+                  <button data-mode="slider">Curseur A/B</button>
+                  <button data-mode="original">Original</button>
+                </div>
+                <div class="live-badge hidden" id="live-badge"><span class="dot"></span><span id="live-text">En direct</span></div>
+                <label class="switch" title="Afficher automatiquement la page en cours de traduction">
+                  <input type="checkbox" id="follow-live" checked><span></span>Suivre
+                </label>
+              </div>
+
+              <div class="stage" id="stage">
+                <button class="nav-arrow left" id="btn-prev" aria-label="Page précédente"><svg><use href="#i-left"/></svg></button>
+                <div class="canvas" id="canvas">
+                  <span class="canvas-badge hidden" id="canvas-orig-badge">Original</span>
+                  <img id="img-base" alt="Page" draggable="false">
+                  <img id="img-top" alt="" draggable="false" aria-hidden="true">
+                  <div class="overlay" id="overlay"></div>
+                  <div class="scanline" id="scanline"></div>
+                </div>
+                <div class="canvas canvas-split hidden" id="canvas-split">
+                  <span class="canvas-badge" id="canvas-split-badge">Traduit</span>
+                  <img id="img-split" alt="Traduit" draggable="false">
+                </div>
+                <div class="slider-container hidden" id="slider-container" style="--slider-pos: 50%;">
+                  <span class="canvas-badge slider-badge-orig">Original</span>
+                  <span class="canvas-badge slider-badge-trans">Traduit</span>
+                  <img id="slider-orig" alt="Original" draggable="false">
+                  <img id="slider-trans" alt="Traduit" draggable="false">
+                  <div class="slider-handle" id="slider-handle" aria-label="Curseur de comparaison">
+                    <span class="slider-line"></span>
+                    <span class="slider-button">‹ ›</span>
+                  </div>
+                </div>
+                <button class="nav-arrow right" id="btn-next" aria-label="Page suivante"><svg><use href="#i-right"/></svg></button>
+                <div class="stage-step" id="stage-step">
+                  <span data-s="detect">Repérage des bulles</span>
+                  <span data-s="clean">Effacement</span>
+                  <span data-s="write">Réécriture</span>
+                </div>
+              </div>
+              <div class="page-indicator"><span id="page-indicator">Page 1</span><span class="hint">Maintenez l'image pour voir l'original</span></div>
+            </div>
+
+            <aside class="bubbles" id="bubbles-panel">
+              <div class="panel-head">
+                <h3>Textes de la page</h3>
+                <button class="btn ghost sm hidden" id="btn-apply-edits">Appliquer</button>
+              </div>
+              <div class="bubble-list" id="bubble-list"><p class="muted">Les textes détectés apparaîtront ici.</p></div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ BIBLIOTHÈQUE ============ -->
+      <section class="view" id="view-library">
+        <div class="page-head">
+          <h2>Bibliothèque</h2>
+          <p class="muted">Tous vos chapitres traduits, prêts à être téléchargés.</p>
+        </div>
+        <div class="library" id="library-list"></div>
+      </section>
+
+      <!-- ============ GUIDE ============ -->
+      <section class="view" id="view-guide">
+        <div class="guide">
+          <nav class="guide-nav" id="guide-nav">
+            <a href="#g-start" class="active">Bien démarrer</a>
+            <a href="#g-key">Obtenir une clé gratuite</a>
+            <a href="#g-live">La traduction en direct</a>
+            <a href="#g-edit">Corriger un texte</a>
+            <a href="#g-style">Apparence du texte</a>
+            <a href="#g-files">Fichiers acceptés</a>
+            <a href="#g-quit">Fermer l'application</a>
+            <a href="#g-faq">Questions fréquentes</a>
+          </nav>
+          <article class="guide-body">
+            <section id="g-start">
+              <h2>Bien démarrer</h2>
+              <p>Manga Translator Studio traduit vos chapitres de manga directement dans les bulles, en conservant le dessin d'origine.</p>
+              <ol class="guide-steps">
+                <li><b>Connectez un service de traduction</b><span>Ouvrez les Paramètres, onglet « Service de traduction », et collez votre clé. Une seule fois suffit.</span></li>
+                <li><b>Déposez votre chapitre</b><span>Glissez le fichier dans la fenêtre ou utilisez « Choisir un fichier ».</span></li>
+                <li><b>Choisissez les langues puis cliquez sur Traduire</b><span>Les pages se traduisent une à une et vous pouvez les lire immédiatement.</span></li>
+                <li><b>Téléchargez le résultat</b><span>Le chapitre traduit est enregistré dans le même format que l'original et rangé dans la Bibliothèque.</span></li>
+              </ol>
+            </section>
+            <section id="g-key">
+              <h2>Obtenir une clé gratuite</h2>
+              <p>L'application utilise un service en ligne pour lire et traduire les bulles. La solution la plus simple est Google Gemini, gratuit pour un usage personnel.</p>
+              <ol class="guide-steps">
+                <li><b>Rendez-vous sur Google AI Studio</b><span><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> et connectez-vous avec votre compte Google.</span></li>
+                <li><b>Cliquez sur « Create API key »</b><span>Copiez la clé affichée.</span></li>
+                <li><b>Collez-la dans l'application</b><span>Paramètres, Service de traduction, Google Gemini, puis « Connecter ». Choisissez un modèle dans la liste et validez.</span></li>
+              </ol>
+              <p class="note">Votre clé reste sur votre ordinateur. Elle n'est envoyée qu'au service que vous avez choisi.</p>
+            </section>
+            <section id="g-live">
+              <h2>La traduction en direct</h2>
+              <p>Pendant la traduction, la page en cours s'affiche avec ses trois étapes :</p>
+              <ul class="guide-list">
+                <li><b>Repérage des bulles</b> : chaque zone de texte est entourée.</li>
+                <li><b>Effacement</b> : le texte d'origine disparaît des bulles.</li>
+                <li><b>Réécriture</b> : la traduction est placée dans chaque bulle.</li>
+              </ul>
+              <p>Désactivez « Suivre » pour rester sur une page pendant que les autres se traduisent. Maintenez l'image appuyée pour comparer avec l'original.</p>
+            </section>
+            <section id="g-edit">
+              <h2>Corriger un texte</h2>
+              <p>Le panneau « Textes de la page » liste chaque bulle avec sa traduction. Modifiez une phrase puis cliquez sur « Appliquer » : la page est redessinée en un instant, sans nouvelle traduction.</p>
+            </section>
+            <section id="g-style">
+              <h2>Apparence du texte</h2>
+              <p>Dans les Paramètres, onglet « Apparence », vous pouvez choisir la police, la couleur, une taille fixe ou automatique, et la manière dont les bulles sont nettoyées. Le réglage « Automatique » convient à la plupart des mangas.</p>
+            </section>
+            <section id="g-files">
+              <h2>Fichiers acceptés</h2>
+              <p>CBZ, CBR, ZIP, RAR, images JPG, PNG, WEBP, ou un dossier contenant des images. Le fichier traduit est rendu dans le même format.</p>
+            </section>
+            <section id="g-quit">
+              <h2>Fermer l'application</h2>
+              <p>Fermez simplement la fenêtre, ou cliquez sur le bouton d'arrêt en haut à droite. Rien ne reste actif en arrière-plan.</p>
+            </section>
+            <section id="g-faq">
+              <h2>Questions fréquentes</h2>
+              <details><summary>Une page reste en erreur</summary><p>Le service a refusé la demande (limite gratuite atteinte ou clé invalide). Attendez quelques minutes, ou cliquez sur la page puis « Retraduire la page ».</p></details>
+              <details><summary>La traduction est lente</summary><p>La vitesse dépend du service choisi. Les modèles marqués « rapide » dans la liste sont recommandés.</p></details>
+              <details><summary>Le texte déborde de la bulle</summary><p>Corrigez la phrase pour la raccourcir, ou laissez la taille sur « Automatique » dans l'onglet Apparence.</p></details>
+              <details><summary>Est-ce que mes fichiers sont envoyés sur Internet ?</summary><p>Seules les images des pages sont envoyées au service de traduction choisi. Les fichiers restent sur votre appareil.</p></details>
+            </section>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ============ PARAMÈTRES ============ -->
+  <div class="modal" id="settings" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card" role="dialog" aria-labelledby="settings-title">
+      <div class="modal-head">
+        <h2 id="settings-title">Paramètres</h2>
+        <button class="icon-btn" data-close aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
+      </div>
+      <div class="settings-tabs" id="settings-tabs">
+        <button class="active" data-stab="engine">Service de traduction</button>
+        <button data-stab="lang">Langues & Style</button>
+        <button data-stab="look">Apparence</button>
+        <button data-stab="storage">Stockage & Mémoire</button>
+      </div>
+      <div class="modal-body">
+        <div class="stab active" id="stab-engine">
+          <div class="current-engine" id="current-engine"></div>
+          <p class="muted small">Choisissez un service, collez votre clé, puis sélectionnez un modèle.</p>
+          <div class="providers" id="providers"></div>
+        </div>
+
+        <div class="stab" id="stab-lang">
+          <div class="field">
+            <label for="set-src">Langue d'origine par défaut</label>
+            <select id="set-src"></select>
+          </div>
+          <div class="field">
+            <label for="set-tgt">Langue de traduction par défaut</label>
+            <select id="set-tgt"></select>
+          </div>
+          <div class="field">
+            <label for="set-register">Style & Registre de langue</label>
+            <select id="set-register">
+              <option value="standard">🗣️ Standard — Français fluide, naturel et direct (Recommandé)</option>
+              <option value="familier">⚡ Familier — Style Shonen, répliques percutantes, argot léger</option>
+              <option value="soutenu">📜 Soutenu — Vouvoiement, phrasé noble (Seinen, historique)</option>
+            </select>
+            <p class="muted small">L'IA adapte le ton et les expressions sans jamais calquer le mot-à-mot.</p>
+          </div>
+          <div class="field" style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--line);">
+            <div class="row" style="justify-content: space-between; align-items: center; gap: 16px;">
+              <div>
+                <label for="set-refiner" style="margin: 0; font-weight: 600;">Raffinement stylistique supplémentaire (Groq)</label>
+                <p class="muted small" style="margin: 0.25rem 0 0 0;">Désactivé par défaut. Si activé, une seconde passe Groq relit et polit chaque bulle (consomme des requêtes API additionnelles).</p>
+              </div>
+              <label class="switch" style="flex-shrink: 0;" title="Activer ou désactiver la relecture par un second modèle">
+                <input type="checkbox" id="set-refiner">
+                <span></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="stab" id="stab-look">
+          <div class="field">
+            <label>Police</label>
+            <div class="choice-grid" id="font-choices">
+              <button data-v="bold" class="font-bold">Manga</button>
+              <button data-v="comic" class="font-comic">Bande dessinée</button>
+              <button data-v="sans" class="font-sans">Moderne</button>
+              <button data-v="serif" class="font-serif">Classique</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Taille du texte</label>
+            <div class="row">
+              <div class="seg" id="size-mode"><button data-v="auto" class="active">Automatique</button><button data-v="fixed">Fixe</button></div>
+              <input type="range" id="font-size" min="10" max="48" value="20" disabled>
+              <output id="font-size-out">Auto</output>
+            </div>
+          </div>
+          <div class="field">
+            <label>Nettoyage des bulles</label>
+            <div class="choice-grid" id="mask-choices">
+              <button data-v="smart">Automatique</button>
+              <button data-v="rounded">Arrondi</button>
+              <button data-v="ellipse">Ovale</button>
+              <button data-v="rectangle">Rectangle</button>
+              <button data-v="transparent">Sans fond</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="text-color">Couleur du texte</label>
+            <div class="row"><input type="color" id="text-color" value="#000000"><span class="muted small">Le mode automatique passe en blanc sur les fonds sombres.</span></div>
+          </div>
+        </div>
+
+        <div class="stab" id="stab-storage">
+          <div class="storage-summary-card">
+            <div class="storage-head-info">
+              <div>
+                <b class="storage-total-title">Espace Disque Utilisé</b>
+                <p class="muted small" id="storage-dir-display">Dossier : data/</p>
+              </div>
+              <div class="storage-total-badge" id="storage-total-badge">-</div>
+            </div>
+            <div class="storage-breakdown-grid">
+              <div class="storage-metric-box">
+                <span class="metric-label">Cache OCR & Vision</span>
+                <b class="metric-val" id="storage-cache-val">-</b>
+                <small class="muted">Blocs détectés réutilisables</small>
+                <button type="button" class="btn ghost sm danger-hover" id="btn-purge-cache">Vider le cache</button>
+              </div>
+              <div class="storage-metric-box">
+                <span class="metric-label">Sessions de travail</span>
+                <b class="metric-val" id="storage-sessions-val">-</b>
+                <small class="muted">Pages temporaires extraites</small>
+                <button type="button" class="btn ghost sm danger-hover" id="btn-purge-sessions">Purger les sessions</button>
+              </div>
+              <div class="storage-metric-box">
+                <span class="metric-label">Bibliothèque / Exports</span>
+                <b class="metric-val" id="storage-output-val">-</b>
+                <small class="muted">Mangas traduits prêts</small>
+                <button type="button" class="btn ghost sm danger-hover" id="btn-purge-output">Purger les exports</button>
+              </div>
+            </div>
+            <div class="storage-actions-row">
+              <button type="button" class="btn ghost sm" id="btn-purge-history">Effacer l'historique</button>
+              <button type="button" class="btn danger sm" id="btn-purge-all">🧹 Nettoyage Global (Tout purger)</button>
+            </div>
+          </div>
+
+          <div class="field" style="margin-top: 1.25rem;">
+            <label for="storage-dir-input">Dossier de stockage persistant (Projets & Appareil)</label>
+            <p class="muted small">Emplacement où l'application sauvegarde vos scans de chapitres. Si vous revenez retoucher ou rescanner une planche plus tard, vous ne recommencez pas de zéro et ne repayez pas l'IA.</p>
+            <div class="row">
+              <input type="text" id="storage-dir-input" placeholder="/chemin/vers/votre/dossier">
+              <button type="button" class="btn ghost sm" id="btn-save-storage-dir">Définir</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <span class="save-state" id="save-state"></span>
+        <button class="btn primary" id="btn-save-settings">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation quitter -->
+  <div class="modal small" id="quit-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card" role="dialog">
+      <div class="modal-head"><h2>Quitter l'application ?</h2></div>
+      <div class="modal-body"><p class="muted">L'application sera complètement fermée. Les traductions terminées restent dans la Bibliothèque.</p></div>
+      <div class="modal-foot">
+        <button class="btn ghost" data-close>Annuler</button>
+        <button class="btn danger" id="btn-quit-confirm">Quitter</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="closed-screen hidden" id="closed-screen">
+    <div><h2>Application fermée</h2><p class="muted">Vous pouvez fermer cet onglet.</p></div>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="/static/js/app.js?v=3"></script>
+</body>
+</html>
