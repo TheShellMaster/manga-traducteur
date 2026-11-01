@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Manga Traducteur — lire, pas configurer</title>
+<style>
+  :root { color-scheme: dark; --ink:#f4efe6; --muted:#b7aa9a; --accent:#ff4d6d; --panel:rgba(18,12,16,.72); }
+  * { box-sizing: border-box; }
+  html, body { margin:0; min-height:100%; background:#07060a; color:var(--ink); font-family: Georgia, "Iowan Old Style", serif; }
+  body { overflow-x:hidden; }
+  .stage { position:fixed; inset:0; z-index:0; perspective:1200px; pointer-events:none; }
+  .page3d {
+    position:absolute; width:180px; height:260px; border-radius:8px;
+    background: linear-gradient(160deg,#2a1d24,#111);
+    box-shadow: 0 30px 80px rgba(0,0,0,.45);
+    transform: rotateY(-18deg) rotateX(8deg);
+    animation: float 9s ease-in-out infinite;
+  }
+  .page3d:nth-child(2) { left:68%; top:18%; animation-duration:11s; animation-delay:-2s; }
+  .page3d:nth-child(1) { left:8%; top:22%; }
+  .page3d:nth-child(3) { left:42%; top:58%; width:140px; height:200px; animation-duration:13s; }
+  @keyframes float {
+    0%,100% { transform: translate3d(0,0,0) rotateY(-18deg) rotateX(8deg); }
+    50% { transform: translate3d(0,-28px,40px) rotateY(8deg) rotateX(2deg); }
+  }
+  @media (prefers-reduced-motion: reduce) { .page3d { animation:none; } }
+  main { position:relative; z-index:1; max-width:920px; margin:0 auto; padding:12vh 24px 80px; }
+  .kicker { letter-spacing:.22em; text-transform:uppercase; font-size:.72rem; color:var(--accent); font-family: system-ui, sans-serif; }
+  h1 { font-weight:500; font-size:clamp(2.4rem,6vw,4.6rem); line-height:.95; margin:.4rem 0 1rem; }
+  p.lead { color:var(--muted); font-size:1.15rem; max-width:38rem; }
+  .reader {
+    margin-top:48px; background:var(--panel); border:1px solid rgba(255,255,255,.08);
+    border-radius:18px; overflow:hidden; backdrop-filter: blur(16px);
+    box-shadow: 0 40px 90px rgba(0,0,0,.35);
+  }
+  .toolbar { display:flex; justify-content:space-between; gap:12px; padding:14px 16px; font-family:system-ui,sans-serif; font-size:.85rem; color:var(--muted); }
+  .spread { display:grid; grid-template-columns:1fr 1fr; min-height:360px; }
+  .panel { padding:28px; border-top:1px solid rgba(255,255,255,.06); }
+  .panel + .panel { border-left:1px solid rgba(255,255,255,.06); }
+  .bubble { background:#fff; color:#111; border-radius:18px; padding:14px 16px; max-width:240px; margin-top:24px; }
+  button {
+    appearance:none; border:0; background:var(--accent); color:white; border-radius:999px;
+    padding:10px 16px; font-family:system-ui,sans-serif; cursor:pointer;
+  }
+  button:disabled { opacity:.45; cursor:progress; }
+  .log { font-family:system-ui,sans-serif; color:var(--muted); min-height:1.4em; }
+  footer { margin-top:28px; color:var(--muted); font-size:.9rem; }
+</style>
+</head>
+<body>
+<div class="stage" aria-hidden="true"><div class="page3d"></div><div class="page3d"></div><div class="page3d"></div></div>
+<main>
+  <div class="kicker">Studio privé · lecture publique</div>
+  <h1>Le manga se traduit page après page.</h1>
+  <p class="lead">Les modèles gratuits ne peuvent pas avaler un chapitre d’un coup. Cette vitrine ne montre ni clé, ni fournisseur, ni route technique. Toi seul gardes le studio.</p>
+  <section class="reader" aria-label="Lecteur">
+    <div class="toolbar"><span>Lecture droite → gauche</span><span id="count">Page 1 / 3</span></div>
+    <div class="spread">
+      <div class="panel"><div class="kicker">Original</div><div class="bubble" id="src">…</div></div>
+      <div class="panel"><div class="kicker">Traduction</div><div class="bubble" id="dst">En attente</div><p class="log" id="log">File séquentielle prête.</p><button id="next" type="button">Traduire la page suivante</button></div>
+    </div>
+  </section>
+  <footer>Une page à la fois. Si le quota gratuit répond 429, on attend, puis on reprend la même page. Jamais tout le chapitre en parallèle.</footer>
+</main>
+<script>
+const pages = [
+  { src: "おはよう。", dst: "Salut." },
+  { src: "急ぐな。", dst: "Pas si vite." },
+  { src: "次のページだ。", dst: "Page suivante." }
+];
+let i = 0; let busy = false;
+const src = document.getElementById("src");
+const dst = document.getElementById("dst");
+const log = document.getElementById("log");
+const count = document.getElementById("count");
+const next = document.getElementById("next");
+function paint() {
+  src.textContent = pages[i].src;
+  dst.textContent = i === 0 ? pages[0].dst : "En attente";
+  count.textContent = "Page " + (i + 1) + " / " + pages.length;
+}
+paint();
+next.addEventListener("click", () => {
+  if (busy) return;
+  busy = true; next.disabled = true;
+  log.textContent = "Traduction de la page " + (i + 1) + " seulement…";
+  dst.textContent = "…";
+  setTimeout(() => {
+    dst.textContent = pages[i].dst;
+    log.textContent = "Page " + (i + 1) + " terminée. La suivante n’a pas été lancée en même temps.";
+    i = Math.min(pages.length - 1, i + 1);
+    if (i < pages.length - 1 || dst.textContent === pages[pages.length - 1].dst) {
+      src.textContent = pages[i].src;
+      count.textContent = "Page " + (i + 1) + " / " + pages.length;
+    }
+    busy = false; next.disabled = i === pages.length - 1 && dst.textContent === pages[i].dst;
+  }, 900);
+});
+</script>
+</body>
+</html>
