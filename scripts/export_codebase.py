@@ -33,6 +33,9 @@ SECTIONS = [
     ]),
     ("C. Interface Web & Frontend (web/)", [
         "web/templates/index.html",
+        "web/templates/studio.html",
+        "web/templates/studio_unlock.html",
+        "web/templates/reader.html",
         "web/static/css/style.css",
         "web/static/js/app.js",
         "web/static/manifest.json",
