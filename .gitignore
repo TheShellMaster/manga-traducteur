@@ -26,6 +26,8 @@ Thumbs.db
 # Persistent Storage & Cache (Never commit cached images or output mangas)
 data/*
 !data/.gitkeep
+history/*
+!history/.gitkeep
 
 # Teamwork scratch directories
 .agents/teamwork/
