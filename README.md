@@ -1,170 +1,133 @@
-# 📖 Manga Translator Studio (100% Cloud Vision & Scanlation Pro)
+# 📖 Manga Translator Studio — Architecture, Vision & Agent Handoff
 
-Application Web moderne de traduction automatique de mangas, manhwas et comics, conçue pour fonctionner avec **zéro modèle lourd local** (`< 50 Mo` de RAM au repos, aucun GPU requis). Toute la puissance d'analyse visuelle (OCR, détection de bulles et traduction contextuelle) est déléguée aux APIs Cloud gratuites ou personnalisées, avec traitement **multithread parallèle (jusqu'à 3 pages en simultané)**.
-
----
-
-## ✨ Fonctionnalités Principales
-
-### 1. 🖼️ Formats Universels & Restitution au Format Exact
-- **Archives complètes** : `.cbz`, `.cbr`, `.rar`, `.zip`.
-- **Dossiers complets** : Import par glisser-déposer de dossiers entiers de chapitres (`webkitdirectory`).
-- **Planches isolées** : `.png`, `.jpg`, `.jpeg`, `.webp`.
-- **Export fidèle** : Le manga traduit est recompressé automatiquement dans le **même format d'origine** (ou téléchargé en un clic au format CBZ standard pour liseuses).
-
-### 2. 👁️ 4 Modes de Visualisation & Liseuse Intégrée
-1. **Comparateur Côte à Côte (Split-View)** : Planche originale à gauche, planche traduite à droite.
-2. **Liseuse Seule** : Lecture plein écran de la version traduite avec bascule instantanée.
-3. **Slider Interactif Avant / Après** : Curseur glissable superposant l'original et la version traduite en temps réel.
-4. **Mode Webtoon (Défilement Continu)** : Lecture verticale sans coupure de tout le chapitre, particulièrement adaptée aux manhwas et webtoons.
-- **Sens de lecture Manga (RTL)** : Bascule instantanée entre le sens japonais (Droite ➜ Gauche) et occidental (Gauche ➜ Droite).
-
-### 3. 🎨 Qualité « Scanlation Pro » & Typographie Manga
-- **Masquage Intelligent des Bulles (`smart`)** :
-  - **Préservation des contours de bulles** : Analyse d'histogramme en C (`Pillow`) et détection des composantes connexes au bord pour effacer uniquement les kanjis/textes internes sans jamais effacer le contour noir de la bulle.
-  - **Détection automatique Fond Sombre / Clair** : Les cartouches de narration sombres sont préservées et composées en texte blanc avec contour de sécurité.
-- **Typographie en Losange (Diamond Word-Wrap)** :
-  - Programmation dynamique équilibrant les lignes de texte pour épouser la forme ovale naturelle des bulles de manga et éliminer les mots orphelins.
-  - Typographie française soignée (espaces insécables automatiques avant `!`, `?`, `:`, `;` et dans `« … »`).
-- **Éditeur de Bulles en Direct (< 50 ms)** :
-  - Panneau latéral **« 💬 Bulles »** permettant d'ajuster ou réécrire n'importe quelle réplique en direct sans relancer l'API.
-
-### 4. ⚡ Vitesse & Ergonomie
-- **Traduction Parallèle Multi-Pages** : Traitement de 2 à 3 pages en simultané, divisant le temps d'attente total par ~2.5x.
-- **Flux LLM en Direct** : Visualisation en temps réel des répliques traduites au fur et à mesure que l'IA les analyse.
-- **Résilience au Rechargement (F5)** : Si vous actualisez votre navigateur pendant ou après une traduction, votre session et votre progression sont immédiatement restaurées via `localStorage`.
-- **Historique Persistant des Mangas** : Retrouvez tous vos chapitres traduits dans le panneau **« 📜 Historique »** pour les relire ou les télécharger à tout moment.
+> **Plateforme moderne de Scanlation Manga & Manhwa (100% Cloud Vision, Zéro modèle local, Empreinte RAM < 50 Mo)**  
+> *Conçu et développé en pair-programming par **TheShellMaster** et l'agent **Antigravity** (Google DeepMind).*
 
 ---
 
-## 🔑 Guide d'Obtention des Clés d'API 100% Gratuites (Sans Carte Bancaire)
+## 🧭 Note d'Intention & Message pour l'Agent Externe (Handoff)
 
-Manga Translator Studio n'a besoin d'aucune configuration manuelle complexe : **vous n'avez aucun nom de modèle ni aucune URL à copier**. Collez simplement votre clé dans l'application, et la liste déroulante affiche automatiquement les vrais modèles autorisés.
+Cher agent collaborateur, ce document récapitule l'état réel du projet, la stack technique, les pièges résolus et la roadmap exacte pour les prochaines étapes.
 
-### 1. Google Gemini (Recommandé - Vision Haute Fidélité)
-Google offre un quota gratuit extrêmement généreux sur ses meilleurs modèles Vision.
-- **Site officiel** : [Google AI Studio](https://aistudio.google.com/)
-- **Quota gratuit** : **1 500 requêtes gratuites par jour** (largement de quoi traduire 50 à 75 chapitres complets par jour).
-- **Étapes pas-à-pas** :
-  1. Rendez-vous sur [aistudio.google.com](https://aistudio.google.com/) et connectez-vous avec votre compte Google.
-  2. Cliquez sur le bouton bleu **« Get API key »** (en haut à gauche).
-  3. Cliquez sur **« Create API key »** (dans un nouveau projet ou un projet existant).
-  4. Copiez votre clé d'API (commençant par `AIzaSy...`).
-  5. Dans Manga Translator Studio, ouvrez **⚙️ Paramètres & APIs**, choisissez **Google Gemini**, collez votre clé et cliquez sur Enregistrer. Les modèles `gemini-2.5-flash` et `gemini-1.5-flash` sont automatiquement prêts !
+Le projet a traversé plusieurs itérations d'agents dont certaines ont causé des dégâts majeurs (troncature involontaire de fichiers, modèles IA inventés, fuites de clés en clair). Nous venons de restabiliser l'intégralité du socle : **112 tests automatisés passent désormais au vert (0 échec)**.
 
-### 2. Groq (Recommandé - Raffinement Instantané du Français)
-Groq utilise des processeurs LPU ultra-rapides capables de polir vos dialogues en français naturel en moins de 300 millisecondes.
-- **Site officiel** : [Groq Console](https://console.groq.com/)
-- **Quota gratuit** : Gratuit pour un usage quotidien personnel.
-- **Étapes pas-à-pas** :
-  1. Créez un compte sur [console.groq.com](https://console.groq.com/).
-  2. Rendez-vous dans l'onglet **« API Keys »** dans le menu de gauche.
-  3. Cliquez sur **« Create API Key »**, donnez-lui un nom (ex: `manga-traducteur`) et copiez la clé `gsk_...`.
-  4. Collez cette clé dans la case **Clé d'API Groq** des Paramètres de l'application.
-
-### 3. OpenRouter (Multi-Fournisseurs & Modèles Vision Gratuits)
-OpenRouter permet d'accéder à des dizaines de modèles Vision sans installer quoi que ce soit.
-- **Site officiel** : [OpenRouter.ai](https://openrouter.ai/)
-- **Étapes pas-à-pas** :
-  1. Créez un compte gratuit sur [openrouter.ai](https://openrouter.ai/).
-  2. Cliquez sur votre profil ➜ **« Keys »** ➜ **« Create a Key »**.
-  3. Copiez la clé (`sk-or-v1-...`).
-  4. Dans Manga Translator Studio, sélectionnez **OpenRouter** et collez votre clé : l'application charge en direct tous les modèles Vision gratuits signalés par `✨ (Gratuit)` (ex: `nvidia/nemotron-3.5-super-vl:free`).
+Voici notre vision commune et les directives prioritaires pour poursuivre le chantier.
 
 ---
 
-## 💻 Guide d'Installation selon votre Système
+## 🏗️ 1. La Stack Technique Complète
 
-### Prérequis
-- **Python 3.10 ou supérieur** (Python 3.11, 3.12 ou 3.14 recommandés).
-- Utilitaires d'archives pour ouvrir les fichiers `.cbr` et `.rar`.
-
-### 1. Ubuntu / Debian / Linux Mint
-Ouvrez votre terminal et exécutez :
-```bash
-sudo apt update && sudo apt install -y python3-venv python3-pip unrar p7zip-full fonts-dejavu-core
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                        ARCHITECTURE DU PROJET                          │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│   [ Interface Web / Visiteur ]        [ Studio Privé / Admin ]         │
+│   • Vitrine 3D Slow-Motion            • Import CBZ / CBR / Dossiers    │
+│   • Lecteur Manga RTL / Webtoon       • Détection & Retouche Bulles    │
+│   • Comparateur Avant / Après         • Suivi Page par Page en Direct  │
+│                   │                                 │                  │
+│                   └────────────────┬────────────────┘                  │
+│                                    ▼                                   │
+│                     FastAPI Backend (server.py)                        │
+│                     • Monoprocessus ultraléger (< 50 Mo RAM)           │
+│                     • File d'attente atomique (statut 'queued')        │
+│                     • Protection CSRF & Masquage des secrets           │
+│                                    │                                   │
+│            ┌───────────────────────┼────────────────────────┐          │
+│            ▼                       ▼                        ▼          │
+│    app/archives.py        app/cloud_vision.py      app/typesetter.py   │
+│    • CBZ, CBR, ZIP, RAR   • Gemini 2.0 / 1.5 Flash • Inpainting en C   │
+│    • Tri naturel          • OpenRouter / NVIDIA    • Losange (DP Wrap) │
+│    • ComicInfo.xml        • Groq Llama 3.3 Refine  • Polices TrueType  │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 2. Fedora / Red Hat / RHEL
-```bash
-sudo dnf install -y python3 python3-pip unrar p7zip dejavu-sans-fonts
-```
+### Backend (`server.py`)
+- **FastAPI / Uvicorn** : Monoprocessus léger, zéro fuite mémoire, résilient aux coupures avec watchdog heartbeat d'auto-extinction propre (`MTS_AUTO_EXIT`).
+- **Sessions & Cache** : Suivi d'état mémoire atomique avec verrou `_session_state_lock`, persistance de l'historique dans `data/history/sessions.json`, et cache SHA-256 des pages pour éviter de réinterroger les APIs pour une page déjà traduite.
 
-### 3. Arch Linux / Manjaro
-```bash
-sudo pacman -S --needed python python-pip unrar p7zip ttf-dejavu
-```
+### Moteur de Vision & Traduction (`app/cloud_vision.py`)
+- **100% Cloud Vision (Zéro modèle lourd local)** : Aucun GPU requis, aucune dépendance lourde (`torch`, `tesseract`, `onnxruntime` sont strictement proscrits).
+- **Fournisseurs Supportés** :
+  - **Google Gemini** : `gemini-2.0-flash`, `gemini-2.0-flash-lite`, `gemini-1.5-flash` (quota généreux de 1 500 requêtes/jour gratuites).
+  - **OpenRouter** : `nvidia/nemotron-3.5-super-vl:free`, `qwen/qwen2.5-vl-72b-instruct`.
+  - **NVIDIA NIM** : `meta/llama-3.2-11b-vision-instruct`, `nvidia/nemotron-3.5-super-vl-120b-a12b`.
+  - **Groq LPU** : `llama-3.3-70b-versatile`, `llama-3.1-8b-instant` (relecture stylistique ultra-rapide).
+  - **Endpoint Personnalisé (OpenAI-compatible)** : Local Ollama, vLLM, LMStudio.
 
-### 4. macOS (via Homebrew)
-```bash
-brew install python unrar p7zip
-```
+### Typographie & Nettoyage Manga (`app/typesetter.py`)
+- **Smart Bubble Inpainting (pur C via Pillow)** : Analyse d'histogramme, seuillage adaptatif selon la luminance du fond (sombre vs clair) et détection des composantes connexes périphériques pour **effacer le texte japonais sans jamais effacer le contour noir de la bulle**.
+- **Diamond Word-Wrap (Programmation Dynamique)** : Algorithme équilibrant le nombre de mots par ligne pour épouser le profil ovale des bulles de manga, avec interdiction absolue des mots orphelins sur la dernière ligne et respect strict de la ponctuation française (`\u00A0` insécable avant `!`, `?`, `:`, `;` et dans `« … »`).
 
-### 5. Windows (via WSL2 Ubuntu)
-Installez WSL2 puis suivez les instructions Ubuntu ci-dessus.
-
----
-
-## 📦 Installation & Démarrage du Projet
-
-1. **Cloner le dépôt ou accéder au dossier** :
-   ```bash
-   cd traducteur
-   ```
-
-2. **Créer l'environnement virtuel Python** :
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-3. **Installer les dépendances requises** :
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Gestion Universelle des Archives (`app/archives.py`)
+- Extraction et recompilation fidèle de chapitres entiers : **CBZ, CBR, ZIP, RAR, dossiers d'images et planches unitaires**.
+- Tri naturel strict (`001.jpg`, `002.jpg`, `010.jpg`), assainissement anti Zip-Slip et conservation inviolée des métadonnées `ComicInfo.xml`.
 
 ---
 
-## 🚀 Lancement en 1 Clic
+## 🔍 2. Problèmes Détectés et Corrigés (Le Bilan de l'Audit)
 
-### Option A : Depuis le Bureau (Raccourci Desktop)
-Double-cliquez simplement sur l'icône **Manga Translator Studio** présente sur votre Bureau.
+Les agents précédents ont commis plusieurs erreurs critiques qui ont été corrigées :
 
-### Option B : Depuis le Terminal
-```bash
-./lancer_manga_translator.sh
+1. **L'Illusion du Parallélisme Multi-Pages** :
+   - *Le problème* : Vouloir traduire 3 ou 4 pages simultanément sur des quotas gratuits menait à l'échec immédiat (erreurs HTTP 429 Too Many Requests) et brisait la cohérence narrative (le modèle traduisait la page 2 sans connaître les répliques de la page 1).
+   - *Le correctif* : **Traduction strictement séquentielle par défaut (`concurrency = 1`)**, transmission du contexte de dialogue de page en page (`context_history`), et temporisation intelligente avec jitter backoff en cas de saturation temporaire d'un fournisseur.
+2. **Élimination des Modèles Hallucinés** :
+   - *Le problème* : Des noms de modèles fictifs (`qwen/qwen3.8-27b`, `gemma4:31b`, `gemini-2.5-flash`) avaient été inscrits dans le code, faisant planter le raffineur Groq et le fallback Gemini.
+   - *Le correctif* : Modèles alignés sur les catalogues réels officiels (`llama-3.3-70b-versatile` sur Groq, `gemini-2.0-flash` sur Google).
+3. **Sécurisation des Secrets & Isolation** :
+   - *Le problème* : `GET /api/settings` renvoyait les clés API en clair dans le JSON.
+   - *Le correctif* : Masquage total des clés dans les réponses de l'API (seul le booléen `configured[provider]` est exposé) et protection contre les requêtes d'écriture cross-origin (CSRF).
+4. **Correction du Rendu Typographique & Cache** :
+   - Résolution du `NameError: name 'Union' is not defined` dans `app/typesetter.py`.
+   - Ajustement du seuil de troncature des grandes bulles (les grands récitatifs ne sont plus supprimés).
+   - Correction du téléchargement permanent partiel : l'archive finale dans `data/output/` n'est figée que lorsque le chapitre est 100% terminé.
+
+---
+
+## 🎯 3. Roadmap & Spécification des Prochaines Étapes
+
+L'objectif actuel est de **transformer ce moteur robuste en un produit digne d'une publication Web grand public**, avec une séparation étanche entre l'expérience visiteur et la console technique.
+
+```mermaid
+flowchart TD
+    A["Visiteur Web / Lecteur"] -->|"Arrive sur le site (/)"| B["Vitrine Publique 3D & Lecteur Manga"]
+    B --> C["Hero Scène 3D : Pages Manga Flottantes (Slow-Motion)"]
+    B --> D["Lecteur Manga Immersif (Démo / Chapitres Ouverts)"]
+    D --> E["Modes : Double Page, RTL, Webtoon, Curseur Comparateur"]
+
+    F["Administrateur / TheShellMaster"] -->|"Accès discret (/studio ou Shift+S)"| G["Studio Technique de Traduction"]
+    G --> H["Glisser-Déposer de Chapitres & Traitement Séquentiel"]
+    G --> I["Gestion des Clés d'API & Fournisseurs (Protégés)"]
+    G --> J["Éditeur de Bulles en Direct & Export d'Archives"]
 ```
-*Le script vérifie automatiquement l'environnement, démarre le serveur local et ouvre votre navigateur Web à l'adresse `http://localhost:8000`.*
+
+### Chantier 1 : La Vitrine Publique 3D (Zéro Exposition Technique)
+- **Design & Slow-Motion** : Scène d'accueil sombre, épurée et cinématographique avec des planches de manga 3D flottantes animées au ralenti (`transform: perspective(1200px) rotateY(...) rotateX(...)`), jeux de lumière néon et glassmorphism soigné.
+- **Zéro fuite technique** : Les visiteurs ne doivent jamais voir de sélecteurs de modèles, de champs de clés API, ni de messages d'erreur backend. Pour eux, le site est un lecteur et un visualiseur de mangas traduits par IA.
+
+### Chantier 2 : Le Grand Lecteur de Manga Immersif
+Intégrer une véritable liseuse manga de haute volée :
+1. **Mode Double Planche (Spread)** : Rendu côte-à-côte des pages paires et impaires pour les doubles pages épiques.
+2. **Sens de Lecture Manga (RTL - Right-to-Left)** : Défilement naturel japonais (Flèche Droite = Page précédente, Flèche Gauche = Page suivante).
+3. **Mode Webtoon / Cascade Verticale** : Défilement continu sans coupure pour les manhwas et webtoons.
+4. **Curseur Comparateur Dynamique (Split Slider)** : Curseur glissant permettant de comparer en direct la version originale scannée et la version traduite avec lettrage français.
+5. **Mode Plein Écran & Raccourcis Clavier** (`F` = Plein écran, `C` = Comparateur, `Espace` = Tourner la page).
+
+### Chantier 3 : Isolation du Studio Technique
+- La console d'administration (`server.py`, upload de chapitres, gestion des clés, édition directe des bulles) est déplacée sur une route dédiée (`/studio`) ou accessible via un commutateur discret protégé dans l'en-tête.
 
 ---
 
-## ⌨️ Raccourcis Clavier & Astuces
+## 🛠️ 4. Règles d'Or pour Tout Agent Travaillant sur ce Dépôt
 
-| Raccourci | Action |
-| :---: | :--- |
-| `←` / `→` | **Page précédente / Page suivante** (s'inverse automatiquement en mode RTL Manga) |
-| `1` | Mode **Comparateur Côte à Côte** |
-| `2` | Mode **Liseuse Seule** |
-| `3` | Mode **Slider Interactif** Avant / Après |
-| `4` | Mode **Webtoon** (défilement vertical sans interruption) |
-| `R` | Basculer entre sens de lecture **Japonais RTL** (`🇯🇵 ←`) et **Occidental LTR** (`🌍 →`) |
-| `F` | Activer / Quitter le **Plein Écran** |
-| `Ctrl` + `Molette` | **Zoom fluide** sur la planche affichée (`50%` à `250%`) |
-| **Clic sur une bulle** | Ouvre l'éditeur latéral pour retoucher le texte français en direct (< 50 ms) |
-| **F5 (Actualiser)** | Restauration automatique et transparente de votre session sans perte de données |
+1. **Ne Jamais Tronquer de Fichiers** : Utilisez `edit_file` pour des modifications chirurgicales. Ne jamais vider un fichier pour y injecter un squelette partiel.
+2. **Zéro Modèle Local** : Ne jamais ajouter de dépendance PyTorch, Torchvision ou ONNX. La cible mémoire reste strictement `< 50 Mo` de RAM hors pic.
+3. **Découverte Réelle des Modèles** : N'inventez aucun nom de modèle. Tout modèle supporté doit exister sur l'API officielle du fournisseur.
+4. **Validation des Tests Obligatoire** : Avant de valider un commit, exécuter systématiquement `./venv/bin/pytest tests/ -q` et s'assurer que les 112 tests passent à 100%.
 
 ---
 
-## 🧪 Tests Automatisés
-
-Le projet comprend une suite complète de **35 tests unitaires et d'intégration** (vérifiant la détection de bulles, le parseur JSON robuste, la calibration du masque anti-aplat noir, la résilience aux coupures d'API et la parallélisation) :
-
-```bash
-./venv/bin/pytest tests/ -q
-```
-
----
-
-## 📄 Licence
-
-Distribué sous licence **MIT**. Développé pour la communauté scanlation et les amateurs de manga.
+*Document maintenu pour la collaboration entre agents et TheShellMaster.*

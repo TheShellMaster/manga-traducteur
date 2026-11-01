@@ -460,7 +460,7 @@ class CloudVisionClient:
             if not ollama_key:
                 return None
             models_to_try = models or (
-                [self.model] if (self.model and self.provider == "ollama") else ["gemma4:31b", "nemotron-3-nano:30b"]
+                [self.model] if (self.model and self.provider == "ollama") else ["llama3.2-vision:latest", "qwen2.5vl:latest"]
             )
             for m in models_to_try:
                 try:
@@ -478,16 +478,21 @@ class CloudVisionClient:
                         break
             return None
 
-        def _try_gemini() -> Optional[Tuple[List[Dict[str, Any]], str]]:
+        def _try_gemini(models: Optional[List[str]] = None) -> Optional[Tuple[List[Dict[str, Any]], str]]:
             gem_key = (self.api_key if self.provider == "gemini" else None) or os.environ.get("GEMINI_API_KEY")
             if not gem_key:
                 return None
-            model = self.model or GEMINI_FREE_VISION_MODELS[0]
-            try:
-                blocks = self._call_gemini(raw_bytes, gem_key, model, prompt)
-                return blocks, f"gemini/{model}"
-            except Exception as e:
-                errors.append(f"Gemini/{model}: {e}")
+            models_to_try = models or (
+                [self.model] if (self.model and self.provider == "gemini") else GEMINI_FREE_VISION_MODELS
+            )
+            for m in models_to_try:
+                try:
+                    blocks = self._call_gemini(raw_bytes, gem_key, m, prompt)
+                    return blocks, f"gemini/{m}"
+                except Exception as e:
+                    errors.append(f"Gemini/{m}: {e}")
+                    if is_permanent_quota_error(e):
+                        break
             return None
 
         def _try_anthropic() -> Optional[Tuple[List[Dict[str, Any]], str]]:
@@ -648,25 +653,35 @@ class CloudVisionClient:
     def _call_gemini(self, image_bytes: bytes, api_key: str, model_name: str, prompt: str) -> List[Dict[str, Any]]:
         """Calls Gemini via google.generativeai or google.genai with exponential backoff."""
         def _do_call():
+            # Try new official google-genai SDK first
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=api_key)
-                gmodel = genai.GenerativeModel(model_name)
+                from google import genai
+                from google.genai import types
+                client = genai.Client(api_key=api_key)
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"), prompt],
+                )
+                text = getattr(response, "text", "") or ""
+                return parse_and_validate_blocks(text)
+            except ImportError:
+                pass
+            except Exception as e:
+                # If google-genai raised an error, retry with classic or raise
+                err_str = str(e)
+                if "not found" in err_str.lower() or "quota" in err_str.lower():
+                    raise
+
+            # Try classic google.generativeai if available
+            try:
+                import google.generativeai as genai_legacy
+                genai_legacy.configure(api_key=api_key)
+                gmodel = genai_legacy.GenerativeModel(model_name)
                 img_part = {"mime_type": "image/jpeg", "data": image_bytes}
                 response = gmodel.generate_content([img_part, prompt])
                 return parse_and_validate_blocks(response.text)
-            except Exception:
-                try:
-                    from google import genai
-                    from google.genai import types
-                    client = genai.Client(api_key=api_key)
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=[types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"), prompt],
-                    )
-                    return parse_and_validate_blocks(response.text)
-                except Exception as e:
-                    raise RuntimeError(f"Gemini API error ({model_name}): {e}")
+            except Exception as e:
+                raise RuntimeError(f"Gemini API error ({model_name}): {e}")
 
         return execute_with_backoff(_do_call)
 

@@ -57,7 +57,10 @@ def save_env_key(key: str, value: str):
     if not found:
         lines.append(f"{key}={value}")
     ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    os.environ[key] = value
+    if value:
+        os.environ[key] = value
+    else:
+        os.environ.pop(key, None)
 
 
 # Universal Provider Catalog & Verified Vision Models (Zero Invented Names)
@@ -106,21 +109,19 @@ PROVIDER_PRESETS = {
         "name": "Groq (Inférence ultra-rapide LPU)",
         "base_url": "https://api.groq.com/openai/v1",
         "models": [
-            {"id": "qwen/qwen3.8-27b", "label": "Qwen 3.8 27B Vision (Groq LPU ultra-rapide)"},
-            {"id": "llama-3.2-11b-vision-preview", "label": "Llama 3.2 11B Vision (Rapide)"},
-            {"id": "llama-3.2-90b-vision-preview", "label": "Llama 3.2 90B Vision (Précis)"},
+            {"id": "llama-3.3-70b-versatile", "label": "Llama 3.3 70B Versatile (Groq LPU ultra-rapide)"},
+            {"id": "llama-3.1-8b-instant", "label": "Llama 3.1 8B Instant (Très rapide)"},
         ],
-        "default_model": "qwen/qwen3.8-27b",
+        "default_model": "llama-3.3-70b-versatile",
     },
     "ollama": {
         "name": "Ollama Cloud / Local",
         "base_url": "https://ollama.com/v1",
         "models": [
-            {"id": "gemma4:31b", "label": "Gemma 4 31B Vision (Ollama Cloud)"},
-            {"id": "nemotron-3-nano:30b", "label": "Nemotron 3 Nano (Ollama Cloud)"},
             {"id": "llama3.2-vision:latest", "label": "Llama 3.2 Vision (Local / Cloud)"},
+            {"id": "qwen2.5vl:latest", "label": "Qwen 2.5 VL (Local / Cloud)"},
         ],
-        "default_model": "gemma4:31b",
+        "default_model": "llama3.2-vision:latest",
     },
     "nvidia": {
         "name": "NVIDIA NIM (Inférence Vision)",
@@ -152,9 +153,9 @@ NVIDIA_NIM_VISION_MODELS = [
 ]
 
 GEMINI_FREE_VISION_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
     "gemini-1.5-flash",
 ]
 
-GROQ_DEFAULT_MODEL = "qwen/qwen3.8-27b"
+GROQ_DEFAULT_MODEL = "llama-3.3-70b-versatile"

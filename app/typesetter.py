@@ -1,7 +1,7 @@
 from collections import deque
 import os
 import re
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Tuple, Dict, Any, Optional, Union
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 from app.config import FONT_PATH, BUNDLED_FONTS_DIR
@@ -460,8 +460,10 @@ def render_manga_page(
         if box_w < 8 or box_h < 8:
             continue
 
-        # Prevent runaway bounding boxes from wiping out entire manga panels or full pages
-        if box_w > width * 0.48 and box_h > height * 0.48:
+        # Prevent runaway hallucinated bounding boxes from wiping out entire full pages
+        if box_w > width * 0.90 and box_h > height * 0.90:
+            continue
+        if (box_w * box_h) > (width * height * 0.82):
             continue
 
         fg_color = default_fg

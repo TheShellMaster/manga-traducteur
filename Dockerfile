@@ -1,24 +1,23 @@
 FROM python:3.12-slim
 
-# Install system dependencies (unrar / 7z and fonts)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    unrar-free \
-    p7zip-full \
-    fonts-dejavu-core \
+    unrar-free p7zip-full fonts-dejavu-core curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install lightweight python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application source code
 COPY app/ ./app/
-COPY main.py .
+COPY web/ ./web/
+COPY server.py ./server.py
 
-# Create input and output mount points
-RUN mkdir -p /app/input /app/output
+RUN mkdir -p /app/data
+ENV MTS_HOME=/app/data
 
-ENTRYPOINT ["python", "main.py"]
-CMD ["--help"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://127.0.0.1:8000/ || exit 1
+
+EXPOSE 8000
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]

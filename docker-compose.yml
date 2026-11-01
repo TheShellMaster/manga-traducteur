@@ -2,15 +2,14 @@ services:
   manga-translator:
     build: .
     container_name: manga-translator
-    env_file:
-      - .env
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      MTS_HOME: /app/data
     volumes:
-      - ./input:/app/input
-      - ./output:/app/output
+      - ./data:/app/data
     deploy:
       resources:
         limits:
           cpus: '1.5'
           memory: 1024M
-        reservations:
-          memory: 256M
